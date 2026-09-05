@@ -57,9 +57,13 @@ in the development ledger. Use a supporting Fulla binary or deliberate shell-pa
 basic rollback; do not infer safe historical writes from their ability to read
 the live pa-v1 files.
 An interrupted transaction or prune journal containing `snapshot_domain` requires
-a supporting binary: older strict JSON readers reject the new field. Finish the
-pending operation before rolling back. Never remove its lock or journal to make
-an older binary proceed.
+a supporting binary. Readers that know the operation's journal but predate this
+field reject it through strict JSON decoding. Development binaries predating
+prune-journal support, including `831caf6`, do not recognize pending prune state
+at all and must not be used for its recovery; they can incorrectly release its
+lock. The historical-binary fixture below proves transaction refusal only.
+Finish pending operations with a supporting binary before rolling back. Never
+remove a lock or journal to make an older binary proceed.
 
 The real historical-binary harness pins `831caf6`, creates a killed transaction,
 checks that the historical recovery refuses the journal without changing data or
