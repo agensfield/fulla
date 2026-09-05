@@ -231,7 +231,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return nil, false, err
 		}
 	case "doctor":
-		if err := p.allow("deep", "recover-lock"); err != nil {
+		if err := p.allow("deep", "recover-lock", "report"); err != nil {
 			return nil, false, err
 		}
 	case "run":
@@ -309,22 +309,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	}
 	defer s.Close()
 	if p.Command == "doctor" {
-		if len(p.Args) != 0 {
-			return nil, false, fault.Usage("doctor takes no positional arguments")
-		}
-		if p.has("recover-lock") {
-			r, e := s.Recover(p.value("recover-lock"))
-			return r, false, e
-		}
-		r, e := s.Doctor(p.has("deep"))
-		r.StorePath = c.StorePath
-		r.ConfigPath = c.ConfigPath
-		r.Sources = c.Sources
-		if e == nil && !r.Healthy {
-			problem := fault.New("doctor.unhealthy", "store requires attention; inspect the diagnostic report")
-			problem.Details["report"] = r
-			return nil, false, problem
-		}
+		r, e := a.doctor(p, c, s)
 		return r, false, e
 	}
 	if err := s.Unlocked(); err != nil {
@@ -464,6 +449,7 @@ const help = `Fulla: a local-first secret custodian (development build)
   fulla list                       List entry names
   fulla move OLD NEW                Move without overwriting
   fulla remove NAME                 Remove an entry
+  fulla doctor --report PATH        Write a private redacted diagnostic report
 
 Global: --store PATH, --config PATH, --json, --non-interactive, --help, --version
 The remaining locked command domains are under implementation.`

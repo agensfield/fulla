@@ -195,8 +195,8 @@ Doctor now includes backup statistics and peer-registry validation in structural
 inspection. An unhealthy report returns status 1 with `doctor.unhealthy` and a
 structured report in JSON error details; human diagnostics show the issues and
 lock ownership evidence. Deep verification refuses pending operations even when
-an orphaned journal has no lock directory. Permission repair and explicit private diagnostic reports remain required
-follow-through.
+an orphaned journal has no lock directory. Permission repair remains required follow-through. Explicit private reports
+are implemented below.
 
 Retention/doctor hosted receipt at `f5e7ddf`:
 https://github.com/agensfield/fulla/actions/runs/33981694235. Both Linux and
@@ -226,3 +226,24 @@ flag applicability, help, and typed output consistency need consolidation as the
 remaining surfaces land. Full before/after transaction snapshots also need
 scaling measurements. These are explicit review items, not claims that passing
 unit tests establishes security or release readiness.
+
+## Private diagnostic reports
+
+`fulla doctor --report /existing/private-directory/report.json` explicitly
+publishes a new 0600 JSON file, using atomic no-replace publication outside the
+store. Existing destinations, symlinks, missing parents, and stdout (`-`) are
+rejected. The destination is checked before deep inspection. `--deep` may be
+combined with reporting; `--recover-lock` may not.
+
+The versioned `fulla.diagnostic/v1` artifact contains aggregate counts, health,
+completion, Git/lock presence, identity/recipient validity, and deduplicated issue
+codes. It deliberately excludes entry names, filesystem paths, plugin locations,
+lock tokens, raw error text/details, secret values, and private identities.
+Unhealthy inspection still publishes its report and returns a nonzero status.
+Early configuration/store-open failures currently precede report creation; this
+limitation remains part of diagnostic workflow follow-through.
+
+CLI fixtures cover healthy deep inspection, unhealthy header inspection,
+redaction, 0600 mode, no replacement, unsafe destinations, and incompatible
+recovery flags. The preceding plugin diagnostics checkpoint passed hosted CI:
+https://github.com/agensfield/fulla/actions/runs/33982555589 (`b0f35ec`).
