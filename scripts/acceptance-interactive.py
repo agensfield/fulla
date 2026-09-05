@@ -195,9 +195,50 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     assert code == 130
     assert not (store / "passwords" / "cancelled.age").exists()
     assert not (store / "lock").exists()
+    historical = b"synthetic-historical-secret\x00\xff"
+    replacement = b"synthetic-current-secret"
+    _ = cli("add", "restore-target", "--stdin", data=historical)
+    log = cast(dict[str, object], json.loads(cli("history", "list", "restore-target", "--json")))
+    log_data = cast(dict[str, object], log["data"])
+    entries = cast(list[dict[str, str]], log_data["entries"])
+    revision = entries[0]["commit"]
+    _ = cli("edit", "restore-target", "--stdin", data=replacement)
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(["history", "restore", revision, "restore-target", *flags], [])
+        assert code == 1 and b"Continue?" not in output
+        assert cli("show", "restore-target") == replacement
+    code, output = terminal(
+        ["history", "restore", revision, "restore-target"],
+        [(b"Continue? [y/N]:", b"n\n")],
+    )
+    assert code == 1 and cli("show", "restore-target") == replacement
+    assert b"synthetic-historical-secret" not in output and replacement not in output
+    assert not (store / "lock").exists()
+    code, _ = terminal(
+        ["history", "restore", revision, "restore-target"],
+        [(b"Continue? [y/N]:", signal.SIGTERM)],
+    )
+    assert code == 143 and cli("show", "restore-target") == replacement
+    assert not (store / "lock").exists()
+    code, output = terminal(
+        ["history", "restore", revision, "restore-target"],
+        [(b"Continue? [y/N]:", b"y\n")],
+    )
+    assert code == 0 and cli("show", "restore-target") == historical
+    assert b"Replace the current entry" in output
+    assert b"synthetic-historical-secret" not in output and replacement not in output
+    _ = cli("remove", "restore-target", "--yes")
+    code, output = terminal(
+        ["history", "restore", revision, "restore-target"],
+        [(b"Continue? [y/N]:", b"y\n")],
+    )
+    assert code == 0 and b"Recreate the missing entry" in output
+    assert cli("show", "restore-target") == historical
+
 print(
     json.dumps(
         {
+            "history_restore_confirmation": True,
             "initialization_confirmation": True,
             "adoption_identity_preserved": True,
             "noninteractive_no_prompt": True,

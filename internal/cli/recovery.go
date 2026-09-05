@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/store"
 	"strconv"
@@ -28,10 +29,16 @@ func (a *App) recovery(p invocation, s *store.Store) (any, error) {
 		if len(p.Args) != 2 {
 			return nil, fault.Usage("history restore requires COMMIT NAME")
 		}
-		if !p.has("yes") {
+		if !p.has("yes") && (p.has("json") || p.has("non-interactive")) {
 			return nil, fault.Interaction("history restore requires --yes to restore the selected entry")
 		}
-		return s.HistoryRestore(p.Args[0], p.Args[1])
+		return s.HistoryRestoreConfirmed(p.Args[0], p.Args[1], func(plan store.HistoryRestorePlan) error {
+			action := "Recreate the missing entry"
+			if plan.Replaces {
+				action = "Replace the current entry"
+			}
+			return a.confirm(p, fmt.Sprintf("%s %q from commit %s.\nThe current state is retained in an encrypted backup. Continue? [y/N]: ", action, plan.Name, plan.Commit))
+		})
 	case "backup prune":
 		if len(p.Args) != 0 {
 			return nil, fault.Usage("backup prune takes no positional arguments")

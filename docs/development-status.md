@@ -364,3 +364,26 @@ with exact identity preservation, and rejection of an existing destination
 without prompting. Existing hidden-input/editor/signal acceptance also passes.
 The Python harness passes Ruff and basedpyright. Deep diagnostics at `377ed7e`
 passed hosted Linux/macOS CI: https://github.com/agensfield/fulla/actions/runs/33984495416.
+
+
+## Historical-entry restore confirmation
+
+`history restore COMMIT NAME` now verifies the selected historical ciphertext
+and prepares a verified replacement under the active recipient before human
+confirmation. The shared lock covers preflight and the controlling-terminal
+prompt, which receives only the full commit, entry name, and whether the entry
+is being replaced or recreated. It never displays either value. Application uses
+the existing journaled mutation/backup path and records a history-restore command.
+
+Decline or handled interruption releases the lock without changing entry bytes,
+Git history, or backup count. JSON/`--non-interactive` requires explicit `--yes`;
+that route performs the same locked preflight. Restoration uses retired recovery
+keys when needed and does not require decrypting a damaged current entry.
+History show/restore refuses an untracked store instead of allowing system Git
+to discover an unrelated ancestor repository.
+
+Store fixtures prove lock exclusion, cancellation preservation, exact binary
+restoration, and missing-entry recovery. Real PTY acceptance covers decline,
+SIGTERM, no value disclosure, replacement/recreation wording, and prompt-free
+agent refusal. The Python harness passes Ruff/basedpyright. Initialization at
+`f048673` passed hosted CI: https://github.com/agensfield/fulla/actions/runs/33984832320.
