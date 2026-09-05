@@ -6,6 +6,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/plugin"
+	"github.com/agensfield/fulla/internal/ageplugin"
 	"github.com/agensfield/fulla/internal/fault"
 )
 
@@ -17,12 +18,12 @@ type pluginInteraction struct {
 	failure error
 }
 
-func pluginUI(source *plugin.ClientUI) (*plugin.ClientUI, *pluginInteraction) {
+func pluginUI(source *plugin.ClientUI) (*ageplugin.ClientUI, *pluginInteraction) {
 	state := &pluginInteraction{}
 	if source == nil {
 		source = &plugin.ClientUI{}
 	}
-	ui := &plugin.ClientUI{WaitTimer: source.WaitTimer}
+	ui := &ageplugin.ClientUI{WaitTimer: source.WaitTimer}
 	refuse := func() error {
 		state.failure = fault.Interaction("age plugin requires interactive input")
 		return state.failure
@@ -71,7 +72,7 @@ func pluginUI(source *plugin.ClientUI) (*plugin.ClientUI, *pluginInteraction) {
 }
 
 type pluginRecipient struct {
-	*plugin.Recipient
+	*ageplugin.Recipient
 	interaction *pluginInteraction
 }
 
@@ -92,7 +93,7 @@ func (r *pluginRecipient) WrapWithLabels(key []byte) ([]*age.Stanza, []string, e
 }
 
 type pluginIdentity struct {
-	*plugin.Identity
+	*ageplugin.Identity
 	interaction *pluginInteraction
 }
 
@@ -110,7 +111,7 @@ func (i *pluginIdentity) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 func pluginName(value any) (string, bool) {
 	switch value.(type) {
-	case *plugin.Identity, *plugin.Recipient, *pluginIdentity, *pluginRecipient:
+	case *plugin.Identity, *plugin.Recipient, *ageplugin.Identity, *ageplugin.Recipient, *pluginIdentity, *pluginRecipient:
 		return value.(interface{ Name() string }).Name(), true
 	}
 	return "", false

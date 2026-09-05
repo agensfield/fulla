@@ -20,7 +20,7 @@ output directory must be new. The tool refuses dirty/uncommitted source and
 never replaces an existing archive. A failed build may leave partial output;
 `checksums.txt` appears only after all five archives have been written.
 
-Packages contain the binary, AGPL license, README, and `SOURCE.json` recording
+Packages contain the binary, AGPL license, third-party notices, README, and `SOURCE.json` recording
 the exact source commit, version, module, and Go toolchain. Binary archives cover
 Darwin/Linux and amd64/arm64, with CGO disabled. The source archive contains the
 tracked tree of that commit. Binaries build from an isolated extraction of that

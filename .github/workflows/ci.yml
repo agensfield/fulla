@@ -43,6 +43,7 @@ jobs:
         run: |
           go build -o dist/fulla .
           go test -c -o dist/age-plugin-fullafixture ./internal/crypt
+          python3 scripts/diagnose-plugin-shutdown.py dist/fulla dist/age-plugin-fullafixture --expect-cleanup
           python3 scripts/acceptance-interactive.py dist/fulla
           python3 scripts/acceptance-clipboard.py dist/fulla
       - name: Authorized noninteractive agent journey

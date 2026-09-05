@@ -35,7 +35,7 @@ native_arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "amd64"}[
 ]
 source_documents: dict[str, bytes] = {}
 with tarfile.open(root / f"fulla_{version}_source.tar.gz", "r:gz") as source:
-    for document in ("LICENSE", "README.md"):
+    for document in ("LICENSE", "README.md", "THIRD_PARTY_NOTICES"):
         member = source.extractfile(f"fulla-{version}/{document}")
         assert member is not None
         source_documents[document] = member.read()
@@ -50,8 +50,9 @@ with tempfile.TemporaryDirectory(prefix="fulla-release-smoke-") as temporary:
                     "LICENSE",
                     "README.md",
                     "SOURCE.json",
+                    "THIRD_PARTY_NOTICES",
                 }
-                assert len(members) == 4 and all(m.isfile() for m in members)
+                assert len(members) == 5 and all(m.isfile() for m in members)
                 for m in members:
                     assert m.uid == 0 and m.gid == 0 and m.mtime == 0
                     assert m.mode == (0o755 if m.name == "fulla" else 0o644)

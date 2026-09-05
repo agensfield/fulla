@@ -13,7 +13,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/agessh"
-	"filippo.io/age/plugin"
+	plugin "github.com/agensfield/fulla/internal/ageplugin"
 	"github.com/agensfield/fulla/internal/fault"
 )
 

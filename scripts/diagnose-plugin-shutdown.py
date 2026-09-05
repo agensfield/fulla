@@ -10,7 +10,8 @@ import time
 from pathlib import Path
 from typing import cast
 
-binary, key_fixture = (str(Path(arg).resolve()) for arg in sys.argv[1:])
+binary, key_fixture = (str(Path(arg).resolve()) for arg in sys.argv[1:3])
+expect_cleanup = sys.argv[3:] == ["--expect-cleanup"]
 with tempfile.TemporaryDirectory(prefix="fulla-plugin-shutdown-") as temporary:
     home = Path(temporary).resolve()
     store = home / "store"
@@ -80,6 +81,15 @@ with tempfile.TemporaryDirectory(prefix="fulla-plugin-shutdown-") as temporary:
                 }
             )
         )
+        if expect_cleanup:
+            assert not hung_after_interrupt, "plugin shutdown remains blocked"
+            stdout, stderr = child.communicate(timeout=1)
+            result = cast(dict[str, object], json.loads(stdout))
+            error = cast(dict[str, object], result["error"])
+            assert child.returncode == 1 and result["ok"] is False
+            assert result["schema"] == "fulla.cli/v1"
+            assert error["code"] == "crypto.encrypt_failed"
+            assert not stderr and b"synthetic fixture value" not in stdout
         if not received_interrupt:
             raise RuntimeError("fixture did not reach plugin shutdown")
     finally:

@@ -121,6 +121,10 @@ func run(version, output string) error {
 	if err != nil {
 		return err
 	}
+	notices, err := os.ReadFile(filepath.Join(snapshot, "THIRD_PARTY_NOTICES"))
+	if err != nil {
+		return err
+	}
 	readme, err := os.ReadFile(filepath.Join(snapshot, "README.md"))
 	if err != nil {
 		return err
@@ -139,7 +143,7 @@ func run(version, output string) error {
 		if err != nil {
 			return err
 		}
-		data, err := archive([]member{{"fulla", 0755, binary}, {"LICENSE", 0644, license}, {"README.md", 0644, readme}, {"SOURCE.json", 0644, provenance}})
+		data, err := archive([]member{{"fulla", 0755, binary}, {"LICENSE", 0644, license}, {"THIRD_PARTY_NOTICES", 0644, notices}, {"README.md", 0644, readme}, {"SOURCE.json", 0644, provenance}})
 		if err != nil {
 			return err
 		}

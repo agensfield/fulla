@@ -1340,3 +1340,36 @@ the operation reached age's unbounded shutdown Wait rather than merely running
 slowly. The reproducer terminates only its own process group. Ruff and
 basedpyright passed. No production fix is claimed; lifecycle ownership and
 consistent packaged/go-install behavior remain required implementation work.
+
+
+## Owned plugin shutdown implementation (2026-09-06)
+
+The confirmed post-error Wait hang is corrected with a maintained age v1.3.2
+plugin-client adaptation. Only package/import/encoding delegation and Close's
+lifecycle behavior differ: one second of graceful shutdown after SIGINT, then
+kill and wait for the owned child. No operation-time deadline is imposed on
+PIN/touch interaction. File encryption stays in the official age module. Source
+hashes, BSD licensing, deterministic parser tests, patch/update obligations, and
+precise limits are recorded in internal/ageplugin/README.md and plugin-lifecycle.md.
+
+The original native reproducer now finishes with SIGINT acknowledged, typed
+crypto.encrypt_failed/status 1, empty stderr, and no fixture-value leakage.
+Linux/macOS CI requires this fixed behavior. Direct tests verify graceful exit
+and forced termination/reaping, including a watchdog that catches the original
+hang. Three repeated race-enabled lifecycle runs passed; plugin roundtrip,
+interaction/refusal, and retained parser tests passed under the race detector.
+Ruff, basedpyright, actionlint, and diff checks passed. Prior abed4d2 CI completed
+successfully on both platforms (33997799228), including the clipboard fixture fix.
+
+The binary packager now includes THIRD_PARTY_NOTICES from the exact source
+snapshot; package acceptance compares those bytes along with the other bundled
+documents. This maintained source adaptation has an explicit update cost and is
+not represented as an untouched upstream package. Protocol stalls and arbitrary
+plugin-created descendants remain separate from the post-protocol shutdown fix.
+
+The full controlling-terminal acceptance passed after the change, including
+plugin PIN/confirmation, typed refusal/cancellation, encrypted SSH unlocking,
+restore confirmations, and editor signal cleanup. A temporary Go source overlay
+restored only upstream's original Close implementation; the new lifecycle test
+then failed deterministically with `shutdown required watchdog`. The actual
+worktree was not modified by that negative-control run.

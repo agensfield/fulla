@@ -1,6 +1,6 @@
-# Plugin lifecycle investigation
+# Plugin lifecycle
 
-The pinned age v1.3.2 client owns plugin subprocess creation and shutdown.
+The upstream age v1.3.2 client owns plugin subprocess creation and shutdown.
 `plugin/client.go` closes its pipes, signals `os.Interrupt`, and calls `cmd.Wait()`
 without a deadline. Its public client interface exposes UI callbacks but no
 process handle, cancellation context, or termination hook.
@@ -30,21 +30,33 @@ The reproducer bounds observation and kills only its newly created process group
 including the fixture plugin, before removing its temporary directory. It never
 uses installed hardware plugins or live credentials.
 
-## Resolution constraints
+## Implemented correction
 
-This remains an implementation defect. Returning from a timer while leaving an
-age call in a goroutine would leave both the goroutine and plugin alive and could
-retain key material. Mutating the process-wide PATH to insert a wrapper would
-also change concurrent executable resolution. Neither is a lifecycle fix.
+Fulla now uses a [maintained source-derived plugin client](../internal/ageplugin/README.md)
+with a narrowly scoped lifecycle patch. After the protocol finishes or fails,
+it closes the pipes, sends SIGINT, allows one second for graceful cleanup,
+then kills an unresponsive child and waits for it to be reaped. Official age
+continues to handle file encryption/decryption and identity/recipient encoding.
+No detached goroutine is left running after Close returns.
 
-A correction must provide owned child termination and reaping, preserve official
-age protocol/key handling, preserve interactive PIN/touch cancellation and typed
-redacted errors, and retain supported installation paths. A local module replace
-or vendor-only patch is insufficient for `go install` distribution, which must
-receive the same behavior as packaged builds. Evaluate an upstream-supported
-process-control API or an isolated supervised helper boundary before choosing
-the implementation. Do not impose a short timeout on legitimate hardware touch
-merely to bound post-error process shutdown.
+The source parser is retained byte-for-byte from age v1.3.2. Client changes,
+upstream file hashes, update obligations, retained deterministic tests, and BSD
+license are recorded with the adaptation. Binary packages include the license
+notices. No module replacement, helper protocol, or PATH mutation is required;
+Go installation compiles the same implementation as packaged builds.
+
+The native reproducer now reports SIGINT received and no operation still running.
+Run it with `--expect-cleanup` to require bounded completion, status 1, the typed
+`crypto.encrypt_failed` JSON error, empty stderr, and no synthetic-value leakage.
+Both hosted platforms run this mode. Direct regression tests require graceful
+exit for a cooperative child and SIGKILL after the grace period for a stubborn
+child, with the process reaped in either case. A five-second test watchdog makes
+the original unbounded Wait fail deterministically.
+
+This bounds shutdown, not protocol progress: a trusted plugin that never replies
+or waits indefinitely for hardware remains a separate behavior. The change does
+not impose a timeout on legitimate PIN/touch interaction, sandbox the plugin,
+or promise termination of arbitrary independent descendants it spawns.
 
 Relevant upstream source:
 https://github.com/FiloSottile/age/blob/v1.3.2/plugin/client.go.

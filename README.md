@@ -17,6 +17,8 @@ and [Arda's safe-sync fork](https://github.com/ardasevinc/pa). It is not endorse
 by upstream. The transfer framing derives from fork commit
 `f75734b8775f72d5d2f9630c08c2b48bdb6d8104`; original notices are preserved.
 The combined work is licensed AGPL-3.0-or-later, see [LICENSE](LICENSE).
+The maintained age plugin client adaptation retains its BSD notices in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
 
 Fulla protects stored and transported secrets. Processes running as the owning
 Unix user, explicitly selected editors/plugins, and injected child programs
