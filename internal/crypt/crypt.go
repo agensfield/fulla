@@ -32,7 +32,7 @@ func Fingerprint(recipient string) string {
 	return "SHA256:" + hex.EncodeToString(h[:])
 }
 
-func Recipients(data []byte, ui *plugin.ClientUI) ([]age.Recipient, error) {
+func Recipients(data []byte, ui *UI) ([]age.Recipient, error) {
 	var out []age.Recipient
 	s := bufio.NewScanner(bytes.NewReader(data))
 	for s.Scan() {
@@ -50,7 +50,7 @@ func Recipients(data []byte, ui *plugin.ClientUI) ([]age.Recipient, error) {
 		case strings.HasPrefix(line, "age1"):
 			r, err = age.ParseX25519Recipient(line)
 			if err != nil {
-				safeUI, state := pluginUI(ui)
+				safeUI, state := pluginUI(ui.plugin())
 				var recipient *plugin.Recipient
 				recipient, err = plugin.NewRecipient(line, safeUI)
 				if err == nil {
@@ -71,11 +71,11 @@ func Recipients(data []byte, ui *plugin.ClientUI) ([]age.Recipient, error) {
 	return out, nil
 }
 
-func Identities(data []byte, ui *plugin.ClientUI) ([]age.Identity, error) {
+func Identities(data []byte, ui *UI) ([]age.Identity, error) {
 	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("-----BEGIN")) {
-		id, err := agessh.ParseIdentity(data)
+		id, err := parseSSHIdentity(data, ui)
 		if err != nil {
-			return nil, fault.New("identity.invalid", "invalid or locked SSH identity; explicit unlocking is required")
+			return nil, err
 		}
 		return []age.Identity{id}, nil
 	}
@@ -87,7 +87,7 @@ func Identities(data []byte, ui *plugin.ClientUI) ([]age.Identity, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "AGE-PLUGIN-") {
-			safeUI, state := pluginUI(ui)
+			safeUI, state := pluginUI(ui.plugin())
 			id, err := plugin.NewIdentity(line, safeUI)
 			if err != nil {
 				return nil, fault.New("identity.invalid", "invalid plugin identity")
@@ -146,7 +146,7 @@ func VerifyRecipient(recipients []age.Recipient, identities []age.Identity) erro
 	}
 	p, err := Decrypt(c, identities)
 	var problem *fault.Error
-	if errors.As(err, &problem) && (strings.HasPrefix(problem.Code, "plugin.") || problem.Code == "interaction.required") {
+	if errors.As(err, &problem) && (strings.HasPrefix(problem.Code, "plugin.") || strings.HasPrefix(problem.Code, "identity.unlock_") || problem.Code == "interaction.required") {
 		return err
 	}
 	if err != nil || string(p) != marker {

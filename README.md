@@ -21,3 +21,12 @@ The combined work is licensed AGPL-3.0-or-later, see [LICENSE](LICENSE).
 Fulla protects stored and transported secrets. Processes running as the owning
 Unix user, explicitly selected editors/plugins, and injected child programs
 are trusted. It does not isolate agents sharing that account.
+
+## Identity input
+
+New stores use native age identities. Compatible age plugins use explicitly
+installed executables. Encrypted OpenSSH Ed25519/RSA identities can be unlocked
+through hidden controlling-terminal input; no decrypted identity is written.
+`--json`, `--non-interactive`, and remote handlers never prompt and return
+`interaction.required` if unlocking is necessary. Legacy encrypted PEM files
+without an embedded public key are unsupported.

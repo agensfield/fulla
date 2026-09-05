@@ -11,7 +11,7 @@ import (
 // and interaction outcomes instead of misreporting them as bad recovery keys.
 func streamFailure(err error, code, message string) error {
 	var problem *fault.Error
-	if errors.As(err, &problem) && (strings.HasPrefix(problem.Code, "plugin.") || problem.Code == "interaction.required") {
+	if errors.As(err, &problem) && (strings.HasPrefix(problem.Code, "plugin.") || strings.HasPrefix(problem.Code, "identity.unlock_") || problem.Code == "interaction.required") {
 		return problem
 	}
 	return fault.New(code, message)

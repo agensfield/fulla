@@ -15,7 +15,7 @@ func EncryptStream(output io.Writer, recipients []age.Recipient) (io.WriteCloser
 	}
 	writer, err := age.Encrypt(output, recipients...)
 	if err != nil {
-		if failure := pluginFailure(err); failure != nil {
+		if failure := identityFailure(err); failure != nil {
 			return nil, failure
 		}
 		return nil, fault.New("crypto.encrypt_failed", "could not wrap encrypted file key")
@@ -31,7 +31,7 @@ func DecryptStream(input io.Reader, identities []age.Identity) (io.Reader, error
 	}
 	reader, err := age.Decrypt(input, identities...)
 	if err != nil {
-		if failure := pluginFailure(err); failure != nil {
+		if failure := identityFailure(err); failure != nil {
 			return nil, failure
 		}
 		return nil, fault.New("crypto.decrypt_failed", "could not decrypt with the selected identity")

@@ -46,7 +46,7 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 		if p.has("report") || p.has("deep") {
 			return nil, fault.Usage("lock recovery cannot be combined with diagnostic inspection")
 		}
-		s, err := store.Open(c.StorePath, true, commandPluginUI(p))
+		s, err := store.Open(c.StorePath, true, commandIdentityUI(p))
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 		}
 	}
 	r := store.DoctorResult{Deep: p.has("deep"), Issues: []string{}}
-	s, err := store.Open(c.StorePath, true, commandPluginUI(p))
+	s, err := store.Open(c.StorePath, true, commandIdentityUI(p))
 	if err == nil {
 		defer s.Close()
 		r, err = s.Doctor(p.has("deep"))

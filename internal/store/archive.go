@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"filippo.io/age"
-	"filippo.io/age/plugin"
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
@@ -156,7 +155,7 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (A
 
 // RestoreFullConfirmed validates private staging before asking to publish it.
 // The callback receives only metadata; cancellation removes unpublished staging.
-func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *plugin.ClientUI, confirm func(ArchiveResult) error) (result ArchiveResult, err error) {
+func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *crypt.UI, confirm func(ArchiveResult) error) (result ArchiveResult, err error) {
 	result.Path = target
 	result.IdentityCloned = true
 	result.Warning = "This restore clones the original identity and peer authority. Use it to replace a lost machine, not to onboard a live peer."

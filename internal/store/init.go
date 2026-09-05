@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"filippo.io/age/plugin"
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
@@ -153,7 +152,7 @@ func privateModes(root *os.Root, dir string) error {
 	})
 }
 
-func Adopt(directory string, dryRun bool, ui *plugin.ClientUI) (result InitResult, err error) {
+func Adopt(directory string, dryRun bool, ui *crypt.UI) (result InitResult, err error) {
 	result = InitResult{Store: directory, Profile: "pa-v1", Adopted: true, DryRun: dryRun}
 	s, err := Open(directory, false, ui)
 	if err != nil {

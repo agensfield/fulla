@@ -20,7 +20,7 @@ func (a *App) initialize(p invocation, c *config.Resolved) (any, error) {
 	}
 	apply := func(dry bool) (store.InitResult, error) {
 		if p.has("adopt") {
-			return store.Adopt(c.StorePath, dry, commandPluginUI(p))
+			return store.Adopt(c.StorePath, dry, commandIdentityUI(p))
 		}
 		return store.Init(c.StorePath, p.has("no-git"), dry)
 	}

@@ -283,7 +283,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if e != nil {
 			return nil, false, e
 		}
-		r, e := store.RestoreFullConfirmed(data, ids, c.StorePath, commandPluginUI(p), func(plan store.ArchiveResult) error {
+		r, e := store.RestoreFullConfirmed(data, ids, c.StorePath, commandIdentityUI(p), func(plan store.ArchiveResult) error {
 			return a.confirm(p, fmt.Sprintf("Restore %d files (%d bytes) into %q.\nThis clones the original identity and peer authority. Use it to replace a lost machine, not to enroll another live peer.\nPublish restored store? [y/N]: ", plan.Files, plan.Bytes, plan.Path))
 		})
 		return r, false, e
@@ -296,7 +296,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		r, e := a.doctor(p, c)
 		return r, false, e
 	}
-	s, err := store.Open(c.StorePath, true, commandPluginUI(p))
+	s, err := store.Open(c.StorePath, true, commandIdentityUI(p))
 	if err != nil {
 		return nil, false, err
 	}

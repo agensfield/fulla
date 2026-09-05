@@ -61,9 +61,9 @@ func Plugins(identities []age.Identity, recipients []age.Recipient) []PluginStat
 	return result
 }
 
-func pluginFailure(err error) error {
+func identityFailure(err error) error {
 	var problem *fault.Error
-	if errors.As(err, &problem) && (problem.Code == "interaction.required" || strings.HasPrefix(problem.Code, "plugin.")) {
+	if errors.As(err, &problem) && (problem.Code == "interaction.required" || strings.HasPrefix(problem.Code, "plugin.") || strings.HasPrefix(problem.Code, "identity.unlock_")) {
 		return problem
 	}
 	var lookup *exec.Error

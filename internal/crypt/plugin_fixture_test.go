@@ -33,6 +33,16 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	if len(os.Args) == 2 && os.Args[1] == "fixture-ssh-keys" {
+		private, public, err := sshFixture()
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(map[string]string{"identity": string(private), "recipient": string(public)}); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	p, err := plugin.New("fullafixture")
 	if err != nil {
 		os.Exit(1)
@@ -131,7 +141,7 @@ func TestRealPluginRoundTripAndInteractionRefusal(t *testing.T) {
 		}
 		return "fixture-pin", nil
 	}}
-	interactive, err := Identities(private, ui)
+	interactive, err := Identities(private, &UI{ClientUI: *ui})
 	if err != nil {
 		t.Fatal(err)
 	}

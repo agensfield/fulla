@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"filippo.io/age"
-	"filippo.io/age/plugin"
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/protocol"
@@ -35,13 +34,13 @@ type Store struct {
 	Dir                     string
 	Root                    *os.Root
 	Meta                    Metadata
-	UI                      *plugin.ClientUI
+	UI                      *crypt.UI
 	ExpectedFingerprint     string
 	ExpectedPeerName        string
 	ExpectedPeerFingerprint string
 }
 
-func Open(directory string, adopted bool, ui *plugin.ClientUI) (*Store, error) {
+func Open(directory string, adopted bool, ui *crypt.UI) (*Store, error) {
 	root, err := securefs.Open(directory)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fault.New("store.uninitialized", "store does not exist; run fulla init")

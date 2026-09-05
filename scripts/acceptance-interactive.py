@@ -407,10 +407,60 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
         plugin_store / "identities"
     ).read_bytes()
 
+    ssh_store = home / "ssh-store"
+    code, _ = terminal(["init", "--no-git", "--yes"], [], target=ssh_store)
+    assert code == 0
+    ssh_keys = cast(
+        dict[str, str],
+        json.loads(
+            subprocess.run(
+                [plugin_binary, "fixture-ssh-keys"],
+                env=env,
+                capture_output=True,
+                check=True,
+                timeout=15,
+            ).stdout
+        ),
+    )
+    _ = (ssh_store / "identities").write_text(ssh_keys["identity"])
+    _ = (ssh_store / "recipients").write_text(ssh_keys["recipient"])
+    ssh_pin = (b"passphrase (hidden):", b"fixture-ssh-passphrase\n")
+    code, output = terminal(["add", "empty", "--stdin"], [ssh_pin], target=ssh_store)
+    assert code == 0 and b"fixture-ssh-passphrase" not in output
+    # Structural inspection must parse locked SSH identities without unlocking.
+    code, output = terminal(["doctor"], [], target=ssh_store)
+    assert code == 0 and b"passphrase (hidden):" not in output
+    before = (ssh_store / "passwords/empty.age").read_bytes()
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(
+            ["edit", "empty", "--generate", *flags], [], target=ssh_store
+        )
+        assert code == 1 and b"interaction.required" in output
+        assert b"passphrase (hidden):" not in output
+        assert (ssh_store / "passwords/empty.age").read_bytes() == before
+        assert not (ssh_store / "lock").exists()
+    code, output = terminal(
+        ["edit", "empty", "--generate"],
+        [(b"passphrase (hidden):", signal.SIGTERM)],
+        target=ssh_store,
+    )
+    assert code == 143 and not (ssh_store / "lock").exists()
+    assert (ssh_store / "passwords/empty.age").read_bytes() == before
+    code, output = terminal(
+        ["show", "empty"],
+        [(b"passphrase (hidden):", b"wrong-private-sentinel\n")],
+        target=ssh_store,
+    )
+    assert code == 1 and b"identity.unlock_failed" in output
+    assert b"wrong-private-sentinel" not in output
+    code, output = terminal(["show", "empty"], [ssh_pin], target=ssh_store)
+    assert code == 0 and b"fixture-ssh-passphrase" not in output
+
 print(
     json.dumps(
         {
             "plugin_terminal_interaction": True,
+            "encrypted_ssh_terminal_unlocking": True,
             "full_restore_confirmation_and_plugin": True,
             "snapshot_restore_confirmation": True,
             "history_restore_confirmation": True,

@@ -62,9 +62,9 @@ Known review items to resolve before acceptance:
 - Git inspection uses GIT_OPTIONAL_LOCKS=0 after a test demonstrated that status
   could rewrite the index during adoption dry-run. Validate this with complete
   before/after store snapshots and shell-pa fixtures.
-- Plugin missing-executable classification and inert inspection are implemented.
-  Noninteractive interaction errors, working mock-plugin round trips, and
-  encrypted SSH identity unlocking remain pending.
+- Plugin missing-executable classification, inert inspection, real mock-plugin
+  round trips, terminal interaction, and encrypted OpenSSH identity unlocking
+  are implemented. Hardware-touch wait/timeout policy remains open.
 - The 64 MiB entry limit is an explicit provisional implementation bound;
   document and test limits consistently across CRUD, bundles, and recovery.
 - Human formatting currently uses structured development output for control
@@ -666,3 +666,36 @@ wait/timeout policy, abrupt-death staging recovery, and release acceptance remai
 open. Earlier stream checkpoint 2eaecf4 passed Linux/macOS hosted CI run 33988306509.
 
 The complete local Go 1.26.0 race suite and vet also passed for this checkpoint.
+
+
+## Encrypted OpenSSH identity unlocking
+
+Encrypted OpenSSH Ed25519 and RSA identities now use the embedded official
+agessh.EncryptedSSHIdentity implementation. Parsing and structural doctor do not
+unlock keys. The library checks the public recipient stanza before requesting a
+passphrase, and caches the unlocked key only in the parsed in-process identity.
+Fulla serializes reuse, owns a copy of the encrypted input, and clears callback
+passphrase buffers after success or failure. It does not write unlocked keys.
+
+The identity UI explicitly separates built-in SSH unlocking from external plugin
+callbacks. Human commands use hidden controlling-terminal input, independent of
+stdin. Machine/remote modes supply no input callback and fail with
+interaction.required when unlocking is needed. --yes does not supply a
+passphrase. Incorrect passphrases and callback failures are redacted as
+identity.unlock_failed; handled terminal signals retain their exit status through
+identity.unlock_cancelled, including entry and archive verification paths.
+
+Unit tests cover Ed25519/RSA, parse-only behavior, recipient mismatch without a
+prompt, wrong-passphrase retry, cached unlocking, caller input-buffer clearing,
+passphrase disposal, and cancellation/error redaction. Real PTY acceptance covers
+creation with stdin independent of the terminal, structural doctor, machine-mode
+refusal, signal cancellation with unchanged ciphertext and released lock, a wrong
+passphrase, and successful read. No live SSH identities are used.
+
+Legacy encrypted PEM without an embedded public key is explicitly unsupported;
+Fulla does not guess or read adjacent .pub files. There is no passphrase option in
+argv or ambient environment and no new dependency. Hardware-specific plugin
+acceptance and bounded wait/cancellation policy remain open.
+
+Local Go 1.26.0 full race suite and vet passed; final encrypted SSH unit tests
+also passed with race detection. PTY acceptance, Ruff, and basedpyright passed.

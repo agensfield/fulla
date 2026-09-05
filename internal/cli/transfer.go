@@ -53,7 +53,7 @@ func transferIdentities(p invocation, s *store.Store) ([]age.Identity, error) {
 		if err != nil {
 			return nil, err
 		}
-		return crypt.Identities(data, commandPluginUI(p))
+		return crypt.Identities(data, commandIdentityUI(p))
 	}
 	if s != nil {
 		ids, _, err := s.Keys()
@@ -118,5 +118,5 @@ func exportRecipients(p invocation) ([]age.Recipient, error) {
 	if !p.has("recipient") {
 		return nil, fault.Interaction("export requires --recipient or --passphrase-fd")
 	}
-	return crypt.Recipients([]byte(strings.Join(p.Flags["recipient"], "\n")), commandPluginUI(p))
+	return crypt.Recipients([]byte(strings.Join(p.Flags["recipient"], "\n")), commandIdentityUI(p))
 }
