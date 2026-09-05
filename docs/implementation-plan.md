@@ -4,6 +4,9 @@ The canonical vault contract was approved on 2026-08-12, extended with scoped
 recovery on 2026-08-30, and authorized for implementation/publication on
 2026-09-05. Fulla's name, binary, and Agensfield repository remain locked.
 
+See [the acceptance matrix](acceptance-matrix.md) for the current requirement-by-requirement
+evidence and unresolved gates. This milestone list is not a substitute for that audit.
+
 ## Milestones
 
 - [x] Read canonical contract, original interview, and predecessor audit.
