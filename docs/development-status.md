@@ -1168,3 +1168,34 @@ read independence. The complete local Go 1.26.0 race suite and vet passed; the
 final expanded regression was also run separately under the race detector.
 The prior acceptance-matrix/legacy-pin checkpoint `da7fd0f` passed hosted CI:
 https://github.com/agensfield/fulla/actions/runs/33994466322.
+
+
+## Historical Fulla binary upgrade and rollback
+
+`scripts/acceptance-upgrade.py` runs two real binaries on disposable Git and
+no-Git stores. CI checks out and builds the exact historical source
+`831caf68655b41b4ca5b064b7693af35df68a6e6`, the first CLI checkpoint exposing the
+recovery and identity workflows. The earlier library checkpoint `7fd872a` had
+those store methods but not the grouped CLI dispatch; attempting its history
+command correctly returned `invocation.invalid`. It is not used as the CLI
+acceptance baseline. Neither historical commit is a published release.
+
+The historical binary initializes a store, adds/edits exact binary values, and
+rotates its identity. Current Fulla reads/deep-verifies without changing any
+store file and restores an old snapshot through the sealed identity chain. On
+Git stores it also restores the historical commit. Both binaries then alternate
+CRUD on the same pa-v1 store, preserving manifest and active identity files. A
+current-binary identity rotation is followed by historical-binary reading and
+restoration of its own earlier snapshot, verified by current Fulla.
+
+Both variants passed locally using binaries built from the exact historical
+archive and current checkout. Ruff and basedpyright pass. CI runs this journey
+on Linux and macOS. The private fixture environment disables Git auto-maintenance
+for the historical process; this isolates format compatibility and does not
+claim that the older binary fixed its known background-maintenance race.
+
+The original manifest at `1999674` already declared all five domains at version 1.
+This journey proves specific real prior/current state interoperability without
+a format transformation. It does not invent a version-0 migration or satisfy
+interrupted domain-upgrade, future-domain CRUD, or released-binary cross-host
+acceptance by implication. Those remain open in the full-contract matrix.

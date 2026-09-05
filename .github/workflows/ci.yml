@@ -51,6 +51,19 @@ jobs:
           GOBIN="$PWD/dist/pa-tools" go install filippo.io/age/cmd/age-keygen@v1.3.2
           go build -o dist/acceptance-sshd ./scripts/acceptance-sshd
           python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools dist/acceptance-sshd
+      - name: Checkout historical Fulla CLI
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: 831caf68655b41b4ca5b064b7693af35df68a6e6
+          path: dist/fulla-predecessor
+          persist-credentials: false
+      - name: Build historical Fulla CLI
+        working-directory: dist/fulla-predecessor
+        env:
+          GOWORK: "off"
+        run: go build -o ../fulla-predecessor-bin .
+      - name: Historical Fulla upgrade and basic rollback
+        run: python3 scripts/acceptance-upgrade.py dist/fulla-predecessor-bin dist/fulla
       - name: Isolated X11 clipboard dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth
