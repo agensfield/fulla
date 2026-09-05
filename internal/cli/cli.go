@@ -287,20 +287,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return r, false, e
 	}
 	if p.Command == "init" {
-		if len(p.Args) != 0 {
-			return nil, false, fault.Usage("init takes no positional arguments")
-		}
-		if p.has("adopt") && p.has("no-git") {
-			return nil, false, fault.Usage("adoption preserves existing Git state")
-		}
-		if !p.has("dry-run") && !p.has("yes") {
-			return nil, false, fault.Interaction("initialization preflight requires --yes (Git history is enabled unless --no-git)")
-		}
-		if p.has("adopt") {
-			r, e := store.Adopt(c.StorePath, p.has("dry-run"), nil)
-			return r, false, e
-		}
-		r, e := store.Init(c.StorePath, p.has("no-git"), p.has("dry-run"))
+		r, e := a.initialize(p, c)
 		return r, false, e
 	}
 	if p.Command == "doctor" {
@@ -438,7 +425,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 
 const help = `Fulla: a local-first secret custodian (development build)
 
-  fulla init --yes                  Create a private store with Git history
+  fulla init                        Confirm a private store with Git history
   fulla init --adopt --dry-run      Verify a compatible pa store without changes
   fulla add NAME                    Choose generation, hidden input, or editor
   fulla add NAME --stdin            Add exact bytes from standard input

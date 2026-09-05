@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
         ).stdout
 
     def terminal(
-        args: list[str], actions: list[tuple[bytes, bytes | int]]
+        args: list[str], actions: list[tuple[bytes, bytes | int]], target: Path | None = None
     ) -> tuple[int, bytes]:
         pid, fd = pty.fork()
         if pid == 0:
@@ -43,7 +43,8 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
             null = os.open(os.devnull, os.O_RDONLY)
             _ = os.dup2(null, 0)
             os.close(null)
-            os.execve(binary, base + args, env)
+            command = base if target is None else [binary, "--store", str(target)]
+            os.execve(binary, command + args, env)
         output = bytearray()
         pending = list(actions)
         deadline = time.monotonic() + 15
@@ -84,7 +85,42 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
                 _ = os.waitpid(pid, 0)
             os.close(fd)
 
-    _ = cli("init", "--yes", "--json")
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(["init", *flags], [])
+        assert code == 1 and b"Continue?" not in output and not store.exists()
+    code, _ = terminal(["init", "--dry-run"], [])
+    assert code == 0 and not store.exists()
+    code, _ = terminal(["init"], [(b"Continue? [y/N]:", b"\n")])
+    assert code == 1 and not store.exists()
+    code, _ = terminal(["init"], [(b"Continue? [y/N]:", signal.SIGTERM)])
+    assert code == 143 and not store.exists()
+    assert not list(home.glob(".fulla-init-*")), "cancelled init left staging material"
+    code, output = terminal(["init"], [(b"Continue? [y/N]:", b"yes\n")])
+    assert code == 0 and (store / "passwords" / ".git").is_dir()
+    assert b"entry names and change times" in output
+
+    untracked = home / "untracked"
+    code, output = terminal(
+        ["init", "--no-git"], [(b"Continue? [y/N]:", b"y\n")], target=untracked
+    )
+    assert code == 0 and b"Git history is disabled" in output
+    assert not (untracked / "passwords" / ".git").exists()
+    identity_before = (untracked / "identities").read_bytes()
+    # Turn this disposable native fixture into an unadopted pa-layout fixture.
+    # Preserve its metadata elsewhere rather than deleting it.
+    _ = (untracked / ".fulla").rename(home / "fixture-metadata")
+    code, _ = terminal(
+        ["init", "--adopt"], [(b"Continue? [y/N]:", b"n\n")], target=untracked
+    )
+    assert code == 1 and not (untracked / ".fulla").exists()
+    code, output = terminal(
+        ["init", "--adopt"], [(b"Continue? [y/N]:", b"y\n")], target=untracked
+    )
+    assert code == 0 and b"preserving its identity and entries" in output
+    assert (untracked / "identities").read_bytes() == identity_before
+    code, output = terminal(["init"], [], target=untracked)
+    assert code == 1 and b"Continue?" not in output
+
     code, output = terminal(
         ["add", "typed"],
         [
@@ -162,6 +198,9 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
 print(
     json.dumps(
         {
+            "initialization_confirmation": True,
+            "adoption_identity_preserved": True,
+            "noninteractive_no_prompt": True,
             "hidden_input": True,
             "generation": True,
             "editor_exact_bytes": True,

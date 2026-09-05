@@ -22,10 +22,35 @@ import (
 	"golang.org/x/term"
 )
 
-func (a *App) interactiveInput(p invocation, c *config.Resolved, original []byte) (value []byte, err error) {
+func (a *App) interactiveInput(p invocation, c *config.Resolved, original []byte) ([]byte, error) {
+	return withTerminal("a controlling terminal is required; use --stdin, --from-fd N, or --generate", func(ctx context.Context, tty *os.File) (value []byte, err error) {
+		if p.Command == "edit" {
+			value, err = a.editValue(ctx, tty, c, original)
+		} else {
+			var choice []byte
+			choice, err = terminalLine(ctx, tty, "input: [g]enerate, [t]ype without echo, [e]ditor: ")
+			if err == nil {
+				switch strings.ToLower(strings.TrimSpace(string(choice))) {
+				case "g", "generate":
+					p.Flags["generate"] = []string{"true"}
+					value, err = a.input(p, c)
+				case "t", "type":
+					value, err = terminalLine(ctx, tty, "secret (enter ends input, no newline is added): ")
+				case "e", "editor":
+					value, err = a.editValue(ctx, tty, c, nil)
+				default:
+					err = fault.Usage("choose generate, type, or editor")
+				}
+			}
+		}
+		return value, err
+	})
+}
+
+func withTerminal(required string, run func(context.Context, *os.File) ([]byte, error)) (value []byte, err error) {
 	fd, err := unix.Open("/dev/tty", unix.O_RDWR|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, fault.Interaction("a controlling terminal is required; use --stdin, --from-fd N, or --generate")
+		return nil, fault.Interaction(required)
 	}
 	tty := os.NewFile(uintptr(fd), "fulla-terminal")
 	defer tty.Close()
@@ -53,25 +78,7 @@ func (a *App) interactiveInput(p invocation, c *config.Resolved, original []byte
 		case <-ctx.Done():
 		}
 	}()
-	if p.Command == "edit" {
-		value, err = a.editValue(ctx, tty, c, original)
-	} else {
-		var choice []byte
-		choice, err = terminalLine(ctx, tty, "input: [g]enerate, [t]ype without echo, [e]ditor: ")
-		if err == nil {
-			switch strings.ToLower(strings.TrimSpace(string(choice))) {
-			case "g", "generate":
-				p.Flags["generate"] = []string{"true"}
-				value, err = a.input(p, c)
-			case "t", "type":
-				value, err = terminalLine(ctx, tty, "secret (enter ends input, no newline is added): ")
-			case "e", "editor":
-				value, err = a.editValue(ctx, tty, c, nil)
-			default:
-				err = fault.Usage("choose generate, type, or editor")
-			}
-		}
-	}
+	value, err = run(ctx, tty)
 	var failure *fault.Error
 	if errors.As(err, &failure) && failure.Code == "editor.cleanup_failed" {
 		return nil, err

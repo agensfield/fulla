@@ -68,8 +68,8 @@ Known review items to resolve before acceptance:
 - The 64 MiB entry limit is an explicit provisional implementation bound;
   document and test limits consistently across CRUD, bundles, and recovery.
 - Human formatting currently uses structured development output for control
-  commands. Guided add/edit input is implemented; routine confirmations and
-  other guided workflows remain pending.
+  commands. Guided add/edit and initialization/adoption confirmation are implemented;
+  other routine confirmations and guided workflows remain pending.
 - Untracked deletion acknowledgements and retained transactional backups need
   a precise documented recovery boundary, consistent with the locked spec.
 - No release tag is authorized by merely passing the current subset of tests.
@@ -341,3 +341,26 @@ or an unrelated process ignoring the store lock remains outside this control.
 
 References: [observed CI failure](https://github.com/agensfield/fulla/actions/runs/33984127042),
 [Git maintenance settings](https://git-scm.com/docs/git-config#Documentation/git-config.txt-maintenanceauto).
+
+
+## Initialization and adoption confirmation
+
+Interactive `init` now runs preflight and asks through the controlling terminal,
+showing the quoted target path and Git history's retention of encrypted versions,
+entry names, and change times. `--no-git` explains that transactional backups
+still remain. `init --adopt` confirms in-place adoption and preservation of the
+existing identity/entries. Application repeats validation after confirmation.
+
+An empty answer or no declines without mutation; handled interruption restores
+the terminal and leaves no store/staging material. JSON and `--non-interactive`
+never prompt and require `--yes`; `--dry-run` remains read-only without prompting.
+The common terminal lifecycle is shared with interactive add/edit. `--yes` is
+only routine authority and does not replace fingerprints or scoped destructive
+acknowledgements. Other command domains still need their complete guided flows.
+
+Real PTY acceptance now covers Git/no-Git initialization, cancellation/default-no,
+SIGTERM cleanup, explicit noninteractive refusal, adoption decline/acceptance
+with exact identity preservation, and rejection of an existing destination
+without prompting. Existing hidden-input/editor/signal acceptance also passes.
+The Python harness passes Ruff and basedpyright. Deep diagnostics at `377ed7e`
+passed hosted Linux/macOS CI: https://github.com/agensfield/fulla/actions/runs/33984495416.
