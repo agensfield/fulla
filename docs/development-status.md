@@ -763,3 +763,28 @@ further adversarial protocol cases, and full acceptance remain open.
 
 The full local Go 1.26.0 race suite and vet passed, including all five new
 partial-commit/receipt cases.
+
+
+## Strict challenge transcripts and captured-proof replay
+
+Challenge validation used a single json.Decoder.Decode with unknown-field
+rejection. A failing regression demonstrated acceptance of duplicate fields,
+a second JSON document, and trailing non-JSON garbage. It now uses the existing
+StrictJSON boundary, retaining protocol/issuer/responder/32-byte nonce checks.
+The three previously accepted cases now fail with peer.authentication_failed.
+
+Protocol tests for current and immediately previous versions obtain a real
+server challenge, prove successful mutual authentication, then reuse the proof
+in the authenticated session and replay it in a new session. Both are rejected.
+Complete file-content inventories of both stores remain unchanged, including
+a remote exact-byte entry. Primitive tests also cover nonce length, identity and
+protocol binding, fresh-session mismatch, unknown fields, and proof expiration
+using an already-expired start time without sleeping.
+
+Replay refusal already worked before the parser fix. This checkpoint adds
+explicit evidence and closes transcript parsing ambiguity; it does not claim a
+previous authentication bypass or a physical-network adversarial audit. Previous
+partial-sync checkpoint c4322c1 passed Linux/macOS CI run 33989879961.
+
+The complete local Go 1.26.0 race suite and vet passed, including the final
+same-session and fresh-session replay cases.

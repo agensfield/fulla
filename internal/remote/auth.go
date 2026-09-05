@@ -1,7 +1,6 @@
 package remote
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
+	"github.com/agensfield/fulla/internal/store"
 )
 
 type challenge struct {
@@ -28,9 +28,7 @@ func newChallenge(version int, issuer, responder string) ([]byte, error) {
 
 func checkChallenge(data []byte, version int, issuer, responder string) error {
 	var c challenge
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&c); err != nil || c.Version != version || c.Issuer != issuer || c.Responder != responder || len(c.Session) != 32 {
+	if err := store.StrictJSON(data, &c); err != nil || c.Version != version || c.Issuer != issuer || c.Responder != responder || len(c.Session) != 32 {
 		return fault.New("peer.authentication_failed", "challenge transcript does not match this session")
 	}
 	return nil
