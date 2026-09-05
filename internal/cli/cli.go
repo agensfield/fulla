@@ -106,6 +106,10 @@ func (a *App) Main(args []string) (status int) {
 }
 
 func (a *App) failure(command string, jsonMode bool, err error) int {
+	var child childExit
+	if errors.As(err, &child) {
+		return int(child)
+	}
 	var e *fault.Error
 	if !errors.As(err, &e) {
 		e = fault.New("operation.failed", "operation could not complete")
@@ -137,6 +141,13 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, fault.Usage("unexpected passthrough arguments")
 	}
 	switch p.Command {
+	case "git":
+		if err := p.allow(); err != nil {
+			return nil, false, err
+		}
+		if p.has("json") {
+			return nil, false, fault.Usage("git owns child streams and does not support --json")
+		}
 	case "remote serve":
 		if err := p.allow(); err != nil {
 			return nil, false, err
@@ -278,6 +289,9 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	}
 	if err := s.Unlocked(); err != nil {
 		return nil, false, err
+	}
+	if p.Command == "git" {
+		return nil, true, a.git(p, s)
 	}
 	if p.Command == "remote serve" {
 		if len(p.Args) != 0 {
