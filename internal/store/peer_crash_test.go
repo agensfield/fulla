@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/agensfield/fulla/internal/crypt"
+	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
 )
 
@@ -60,6 +62,8 @@ func TestPeerCrashHelper(t *testing.T) {
 			}
 		}
 		err = s.savePeer(p, operation != "enroll", os.Getenv("FULLA_PEER_CRASH_OLD_PIN"), hook)
+	case "remove":
+		err = s.removePeerConfirmed(p.Name, nil, pause)
 	case "dry-run", "activate":
 		identity, e := s.IdentityShow()
 		if e != nil {
@@ -76,7 +80,7 @@ func TestPeerCrashHelper(t *testing.T) {
 
 func TestPeerPublicationKilledOwner(t *testing.T) {
 	for _, git := range []bool{false, true} {
-		for _, operation := range []string{"enroll", "rotate", "legacy-rotate", "dry-run", "activate"} {
+		for _, operation := range []string{"enroll", "rotate", "legacy-rotate", "remove", "dry-run", "activate"} {
 			t.Run(fmt.Sprintf("git=%t/%s", git, operation), func(t *testing.T) {
 				s := fixture(t, git)
 				value := []byte{0, 255, 10, 65}
@@ -156,11 +160,16 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 					t.Fatal("accepted wrong owner")
 				}
 				result, err := s.Recover(lock.Token)
-				if err != nil || result["lock_released"] != true || result["recovered"] != (operation == "rotate") {
+				if err != nil || result["lock_released"] != true || result["recovered"] != (operation == "rotate" || operation == "remove") {
 					t.Fatal("unexpected no-journal lock recovery", result, err)
 				}
 				current, err := s.Peer(next.Name)
-				if err != nil || current.Host != next.Host || current.Fingerprint != next.Fingerprint {
+				if operation == "remove" {
+					var problem *fault.Error
+					if !errors.As(err, &problem) || problem.Code != "peer.not_found" {
+						t.Fatal("removal was not preserved", err)
+					}
+				} else if err != nil || current.Host != next.Host || current.Fingerprint != next.Fingerprint {
 					t.Fatal("lost published peer", err)
 				}
 				if current.Activated != (operation == "activate") {
@@ -183,7 +192,7 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 				if err != nil || !bytes.Equal(keys, afterKeys) {
 					t.Fatal("changed identity", err)
 				}
-				if operation == "rotate" || operation == "legacy-rotate" {
+				if operation == "rotate" || operation == "legacy-rotate" || operation == "remove" {
 					entries, err := os.ReadDir(filepath.Join(s.Dir, metadata, "receipts"))
 					if err != nil {
 						t.Fatal(err)
@@ -203,7 +212,11 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 						if err := json.Unmarshal(data, &receipt); err != nil {
 							t.Fatal(err)
 						}
-						if receipt.Command != "peer rotate" {
+						command := "peer rotate"
+						if operation == "remove" {
+							command = "peer remove"
+						}
+						if receipt.Command != command {
 							continue
 						}
 						found = true
@@ -211,8 +224,15 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 						if operation == "legacy-rotate" {
 							expectedPhase = "prepared"
 						}
-						if receipt.Phase != expectedPhase || receipt.Previous.Host != original.Host || receipt.Replacement.Host != next.Host || receipt.Previous.Fingerprint != original.Fingerprint || receipt.Replacement.Fingerprint != next.Fingerprint {
-							t.Fatal("lost reconciled rotation evidence")
+						if receipt.Phase != expectedPhase || receipt.Previous.Host != original.Host || receipt.Previous.Fingerprint != original.Fingerprint {
+							t.Fatal("lost reconciled peer evidence")
+						}
+						if operation == "remove" {
+							if receipt.Replacement.Name != "" {
+								t.Fatal("invented removal replacement")
+							}
+						} else if receipt.Replacement.Host != next.Host || receipt.Replacement.Fingerprint != next.Fingerprint {
+							t.Fatal("lost replacement evidence")
 						}
 					}
 					if !found {

@@ -199,3 +199,112 @@ func TestPeerReceiptBindingSurvivesRecoveryTakeover(t *testing.T) {
 		t.Fatal("receipt not reconciled", err)
 	}
 }
+
+func TestPeerRemovalReceiptReconciliation(t *testing.T) {
+	for _, state := range []string{"old", "removed", "unexpected", "missing-registry"} {
+		t.Run(state, func(t *testing.T) {
+			s := fixture(t, false)
+			identity, err := s.IdentityShow()
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := Peer{Version: 1, Name: "fixture", Host: "old", Recipient: identity.Recipient, Fingerprint: identity.Fingerprint}
+			if err := s.SavePeer(p, false, ""); err != nil {
+				t.Fatal(err)
+			}
+			previous, err := s.Peer(p.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := metadata + "/peers/fixture.json"
+			before, err := securefs.Read(s.Root, name, maxMetadata)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state == "removed" {
+				if err := s.Root.Remove(name); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if state == "unexpected" {
+				current := previous
+				current.Host = "unexpected"
+				before, err = json.Marshal(current)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := securefs.Replace(s.Root, name, before); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if state == "missing-registry" {
+				if err := s.Root.Rename(metadata+"/peers", metadata+"/peers-fixture-away"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			id := securefs.ID()
+			receiptPath := metadata + "/receipts/" + id + ".json"
+			data, err := json.Marshal(map[string]any{"version": 1, "command": "peer remove", "previous": previous, "phase": "prepared"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := securefs.PublishNew(s.Root, receiptPath, data); err != nil {
+				t.Fatal(err)
+			}
+			lock, err := s.Lock("fixture removal receipt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lock.Release()
+			err = s.reconcilePeerReceipt(id)
+			after, readErr := securefs.Read(s.Root, receiptPath, maxMetadata)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if state == "unexpected" || state == "missing-registry" {
+				var problem *fault.Error
+				expected := "peer.recovery_mismatch"
+				if state == "missing-registry" {
+					expected = "peer.recovery_invalid"
+				}
+				if !errors.As(err, &problem) || problem.Code != expected || !bytes.Equal(data, after) {
+					t.Fatal("guessed removal", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				var receipt struct {
+					Phase       string
+					Replacement *Peer
+				}
+				if err := json.Unmarshal(after, &receipt); err != nil {
+					t.Fatal(err)
+				}
+				phase := "aborted"
+				if state == "removed" {
+					phase = "applied"
+				}
+				if receipt.Phase != phase || receipt.Replacement != nil {
+					t.Fatal("wrong removal receipt")
+				}
+				if err := s.reconcilePeerReceipt(id); err != nil {
+					t.Fatal("retry failed", err)
+				}
+			}
+			if state == "removed" {
+				if _, err := s.Root.Lstat(name); !os.IsNotExist(err) {
+					t.Fatal("recreated removed pin", err)
+				}
+			} else {
+				if state == "missing-registry" {
+					name = metadata + "/peers-fixture-away/fixture.json"
+				}
+				current, err := securefs.Read(s.Root, name, maxMetadata)
+				if err != nil || !bytes.Equal(before, current) {
+					t.Fatal("changed authorization", err)
+				}
+			}
+		})
+	}
+}

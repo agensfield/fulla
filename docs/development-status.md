@@ -1072,3 +1072,42 @@ https://github.com/agensfield/fulla/actions/runs/33992813831.
 The full local Go 1.26.0 race suite and vet passed. The final ten-case killed
 writer matrix, reconciliation cases, and killed-recovery takeover/retry case
 also passed under race detection, followed by store vet.
+
+
+## Bound peer-removal recovery
+
+Peer removal now binds its prepared receipt to the held lock before deleting the
+pin, sharing the existing rotation binding helper. The removal fixture can pause
+after deletion and directory synchronization but before receipt finalization.
+Recovery strictly distinguishes removal from rotation: a valid existing peer
+registry with the named pin absent finalizes removal as applied; the exact old
+record finalizes it as aborted. A different live record, unexpected replacement
+payload, missing registry, or contradictory receipt fails closed. Reconciliation
+never recreates a removed peer or changes live authorization.
+
+The killed-process matrix now includes removal on Git and no-Git stores, twelve
+cases in total with the legacy rotation fixtures. Removal recovery verifies the
+pin remains absent, the receipt becomes applied, and local secret/identity bytes
+remain unchanged. Unit cases cover old, removed, unexpected, and missing-registry
+states, preserving evidence on refusal and retrying successful reconciliation.
+Existing rotation, takeover/retry, cancellation, and applied-error cases remain
+part of the relevant store gates. The internal post-publication pause is not a
+production CLI/environment control.
+
+The same compatibility boundary applies: complete an interrupted bound operation
+with a supporting Fulla binary before using an older recovery implementation.
+Unbound historical receipts remain untouched. Actual power-loss behavior and the
+remaining pre-publication boundaries are not inferred from these subprocess and
+injected-state tests.
+
+The prior bound-rotation recovery checkpoint `cf030f0` passed hosted Linux/macOS
+CI: https://github.com/agensfield/fulla/actions/runs/33993278466.
+
+Remaining audit: handled I/O failures can release the owned lock while leaving a
+prepared receipt. The new reconciliation binding survives only while the lock
+metadata exists; that error path needs a separate retention/finalization policy.
+The killed-owner tests do not prove it.
+
+The full local Go 1.26.0 race suite and vet passed. Final targeted removal,
+rotation-reconciliation, killed-owner, and takeover/retry race cases and store
+vet also passed after adding the missing-registry guard.
