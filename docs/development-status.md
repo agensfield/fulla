@@ -841,3 +841,32 @@ remains part of the broader crash-acceptance work.
 
 Local full Go 1.26.0 race suite, final peer-removal/CLI/remote race tests, vet,
 real PTY acceptance, Ruff, and basedpyright passed.
+
+
+## Reproducible packaging and untracked shell-pa acceptance
+
+The distribution tool now builds all four binaries from an isolated extraction
+of the exact committed source archive and reads the bundled LICENSE/README from
+that same snapshot. Two local builds at `48ae47d` were byte-identical; archive
+checksums, platform settings, source/document correspondence, and native version
+smoke passed. The first packaging commit `0ccc793` passed Linux/macOS CI (run
+33991058913). See [distribution](distribution.md) for reproducible commands and
+remaining publication gates. These are untagged `0.1.0-dev` packages.
+
+The real pinned shell-pa acceptance script now runs the same disposable journey
+with Git enabled and with PA_NOGIT set. Both prove unchanged adoption dry-run,
+predecessor-file preservation, alternating exact-byte CRUD, shared lock refusal,
+unchanged identity/recipients, and shell-pa CRUD after ceasing Fulla use. The
+untracked store remains untracked, including after adoption and rollback. Fulla
+refuses unacknowledged untracked deletion without changing the store; the fixture
+then supplies the required --permanent-delete acknowledgement.
+
+This exposed a status defect in pinned predecessor f75734b: its stdin add/edit
+and delete functions end in `$git_enabled && git_add_and_commit`. With Git off,
+that expression returns 1 even when publication succeeded. The harness records
+that exact predecessor status and independently verifies resulting bytes or
+absence. It does not normalize Fulla statuses or modify the predecessor. Both
+real-pa modes passed locally, along with Ruff and basedpyright. The existing CI
+step automatically exercises both modes. Full adoption-plus-sync-cutover
+acceptance remains separate and incomplete; this does not authorize live-store
+adoption or cutover.
