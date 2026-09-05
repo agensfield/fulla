@@ -122,3 +122,9 @@ entry, restored terminal state, and removal of plaintext files/shared locks.
 The Go race suite also exercises competing writes, failed-edit preservation,
 editor output rejection, and cancellation cleanup. These are fixture proofs;
 live credential stores remain untouched.
+
+Hosted receipt for the interactive checkpoint at `a5ef9a9`:
+https://github.com/agensfield/fulla/actions/runs/33979798139. Both Linux and
+macOS passed the full race suite, static analysis, controlling-terminal
+acceptance, and four-platform builds. The Python acceptance harness also
+passes Ruff and basedpyright without warnings.
