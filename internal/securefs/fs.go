@@ -166,6 +166,24 @@ func WriteNew(root *os.Root, name string, data []byte) (err error) {
 	return SyncDir(root, filepath.Dir(name))
 }
 
+// PublishNew exposes only a complete synced file, with atomic no-replace rename.
+func PublishNew(root *os.Root, name string, data []byte) error {
+	parent, err := root.OpenRoot(filepath.Dir(name))
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	tmp := ".fulla-stage-" + ID()
+	if err := WriteNew(parent, tmp, data); err != nil {
+		return err
+	}
+	defer parent.Remove(tmp)
+	if err := RenameNew(parent, tmp, filepath.Base(name)); err != nil {
+		return err
+	}
+	return SyncDir(parent, ".")
+}
+
 // Replace atomically updates an already-owned file. No-replace publication is
 // a distinct operation; ordinary create paths must not use Replace.
 func Replace(root *os.Root, name string, data []byte) error {
