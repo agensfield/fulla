@@ -371,6 +371,18 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if len(p.Args) != 1 {
 			return nil, false, fault.Usage(p.Command + " requires one entry name")
 		}
+		if !p.has("stdin") && !p.has("from-fd") && !p.has("generate") {
+			if p.has("json") || p.has("non-interactive") {
+				return nil, false, fault.Interaction("provide --stdin, --from-fd N, or --generate")
+			}
+			if p.has("length") || p.has("alphabet") {
+				return nil, false, fault.Usage("generation settings require --generate")
+			}
+			r, err := s.WriteInteractive(p.Args[0], p.Command == "edit", func(original []byte) ([]byte, error) {
+				return a.interactiveInput(p, c, original)
+			})
+			return r, false, err
+		}
 		value, err := a.input(p, c)
 		if err != nil {
 			return nil, false, err
@@ -397,8 +409,10 @@ const help = `Fulla: a local-first secret custodian (development build)
 
   fulla init --yes                  Create a private store with Git history
   fulla init --adopt --dry-run      Verify a compatible pa store without changes
+  fulla add NAME                    Choose generation, hidden input, or editor
   fulla add NAME --stdin            Add exact bytes from standard input
   fulla show NAME                   Write exact decrypted bytes
+  fulla edit NAME                   Edit with the trusted configured editor
   fulla edit NAME --stdin           Replace an existing entry
   fulla list                       List entry names
   fulla move OLD NEW                Move without overwriting

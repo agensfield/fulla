@@ -29,6 +29,10 @@ jobs:
         run: go test -race ./...
       - name: Static analysis
         run: go vet ./...
+      - name: Controlling-terminal acceptance
+        run: |
+          go build -o dist/fulla .
+          python3 scripts/acceptance-interactive.py dist/fulla
       - name: Four-platform builds
         shell: bash
         run: |

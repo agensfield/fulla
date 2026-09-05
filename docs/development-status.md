@@ -68,7 +68,8 @@ Known review items to resolve before acceptance:
 - The 64 MiB entry limit is an explicit provisional implementation bound;
   document and test limits consistently across CRUD, bundles, and recovery.
 - Human formatting currently uses structured development output for control
-  commands; guided TTY parity and the full command hierarchy remain pending.
+  commands. Guided add/edit input is implemented; routine confirmations and
+  other guided workflows remain pending.
 - Untracked deletion acknowledgements and retained transactional backups need
   a precise documented recovery boundary, consistent with the locked spec.
 - No release tag is authorized by merely passing the current subset of tests.
@@ -94,3 +95,30 @@ completion without opening a store. Source the generated script in the chosen
 shell (for example, `source <(fulla completion bash)`). Generation rejects JSON.
 Bash behavior and Bash/Zsh syntax were checked locally; Fish is unavailable on
 this host and its syntax/runtime acceptance remains outstanding.
+
+## Interactive write checkpoint
+
+Interactive `add NAME` offers generated input, hidden terminal entry, or the
+configured editor. `edit NAME` opens the current exact value in the editor.
+Explicit stdin/descriptor/generation paths and JSON remain noninteractive.
+Prompts use the controlling terminal, leaving stdin untouched. The shared lock
+covers the interactive write, including the editor's lifetime, so competing
+cooperating writers cannot invalidate the edited original.
+
+Editor configuration uses the TOML argv array, then standard VISUAL/EDITOR
+trusted shell commands, then vi. Temporary material uses a 0700 directory and
+0600 file, preferring Linux /dev/shm when TMPDIR is not selected. Fulla rejects
+symlink, hard-link, permissive, and oversized editor output. It removes the
+private directory (including editor-created backups inside it) on success,
+failure, and handled interrupt. Editor activity outside this directory remains
+inside the documented trusted-editor boundary. Uncatchable termination cannot
+run cleanup.
+
+`python3 scripts/acceptance-interactive.py dist/fulla` passed locally with real
+pseudo-terminals and is now a Linux/macOS CI gate. It verifies all three add
+choices, binary edit preservation, independence from stdin, hidden input,
+SIGTERM during an editor that changes terminal mode, Ctrl-C during secret
+entry, restored terminal state, and removal of plaintext files/shared locks.
+The Go race suite also exercises competing writes, failed-edit preservation,
+editor output rejection, and cancellation cleanup. These are fixture proofs;
+live credential stores remain untouched.
