@@ -788,3 +788,30 @@ partial-sync checkpoint c4322c1 passed Linux/macOS CI run 33989879961.
 
 The complete local Go 1.26.0 race suite and vet passed, including the final
 same-session and fresh-session replay cases.
+
+
+## Live metadata-domain validation
+
+An opened Store cached its domain-version map and RequireDomain consulted only
+that snapshot. A failing regression changed the persisted peers domain to v2
+and then successfully wrote a v1 peer through the old handle. RequireDomain now
+reads and validates the current store manifest, using the same decoder as Open.
+Repeated checks inside peer mutation locks therefore observe a later upgrade.
+It does not mutate the shared cached Metadata object or rewrite the manifest.
+
+The fixture matrix covers all five domains (peers, sync, backup, identity,
+transactions) with absent, invalid negative, current-v1, and future-v2 versions.
+Unsupported domains fail individually while independent supported domains remain
+available. Duplicate/trailing JSON and future root versions are rejected by both
+fresh and already-open handles. The peer-upgrade regression verifies no peer
+publication and no retained lock. Ordinary adoption fixtures still pass.
+
+This is domain-check coverage, not proof of the complete migration program.
+No previous released Fulla domain format exists yet; legacy shell-pa adoption
+is exercised separately. Safe older-binary CRUD alongside newer backup domains
+needs a complete policy/acceptance audit because CRUD creates transactional
+backup snapshots. Interrupted domain upgrades and every cross-domain mutation
+boundary remain open rather than being inferred from the version-check matrix.
+
+The complete local Go 1.26.0 race suite and vet passed, including the live
+manifest regression and 20 domain-version combinations.

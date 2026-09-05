@@ -65,13 +65,9 @@ func Open(directory string, adopted bool, ui *crypt.UI) (*Store, error) {
 		root.Close()
 		return nil, fault.New("metadata.invalid", "cannot read store metadata")
 	}
-	if err := StrictJSON(data, &s.Meta); err != nil {
+	if err := decodeMetadata(data, &s.Meta); err != nil {
 		root.Close()
 		return nil, err
-	}
-	if s.Meta.Version != 1 || s.Meta.Profile != "pa-v1" || s.Meta.StoreID == "" {
-		root.Close()
-		return nil, fault.New("metadata.unsupported", "unsupported store metadata")
 	}
 	return s, nil
 }
@@ -95,8 +91,28 @@ func (s *Store) Validate() error {
 	return err
 }
 
+func decodeMetadata(data []byte, out *Metadata) error {
+	if err := StrictJSON(data, out); err != nil {
+		return err
+	}
+	if out.Version != 1 || out.Profile != "pa-v1" || out.StoreID == "" {
+		return fault.New("metadata.unsupported", "unsupported store metadata")
+	}
+	return nil
+}
+
 func (s *Store) RequireDomain(domain string) error {
-	v, ok := s.Meta.Domains[domain]
+	// Long-lived RPC/store handles must not authorize writes using the manifest
+	// cached at Open. Repeated checks under mutation locks must stay authoritative.
+	data, err := securefs.Read(s.Root, metadata+"/store.json", maxMetadata)
+	if err != nil {
+		return fault.New("metadata.invalid", "cannot read current store metadata")
+	}
+	var current Metadata
+	if err := decodeMetadata(data, &current); err != nil {
+		return err
+	}
+	v, ok := current.Domains[domain]
 	if !ok || v != 1 {
 		return fault.New("metadata.unsupported", "unsupported "+domain+" metadata; use a compatible Fulla binary")
 	}
