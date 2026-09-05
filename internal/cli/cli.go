@@ -303,15 +303,15 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		r, e := store.Init(c.StorePath, p.has("no-git"), p.has("dry-run"))
 		return r, false, e
 	}
+	if p.Command == "doctor" {
+		r, e := a.doctor(p, c)
+		return r, false, e
+	}
 	s, err := store.Open(c.StorePath, true, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	defer s.Close()
-	if p.Command == "doctor" {
-		r, e := a.doctor(p, c, s)
-		return r, false, e
-	}
 	if err := s.Unlocked(); err != nil {
 		return nil, false, err
 	}

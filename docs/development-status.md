@@ -240,8 +240,11 @@ completion, Git/lock presence, identity/recipient validity, and deduplicated iss
 codes. It deliberately excludes entry names, filesystem paths, plugin locations,
 lock tokens, raw error text/details, secret values, and private identities.
 Unhealthy inspection still publishes its report and returns a nonzero status.
-Early configuration/store-open failures currently precede report creation; this
-limitation remains part of diagnostic workflow follow-through.
+Missing stores and store-open failures (including unsafe file/root modes) also
+produce an incomplete report with the redacted error code. Tests verify that
+inspection preserves unsafe modes and identity bytes. Configuration-resolution
+failures still precede report creation because the selected store boundary is
+not yet known; this remains part of diagnostic workflow follow-through.
 
 CLI fixtures cover healthy deep inspection, unhealthy header inspection,
 redaction, 0600 mode, no replacement, unsafe destinations, and incompatible
