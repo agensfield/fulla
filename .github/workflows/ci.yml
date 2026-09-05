@@ -37,6 +37,8 @@ jobs:
           go test -c -o dist/age-plugin-fullafixture ./internal/crypt
           python3 scripts/acceptance-interactive.py dist/fulla
           python3 scripts/acceptance-clipboard.py dist/fulla
+      - name: Authorized noninteractive agent journey
+        run: python3 scripts/acceptance-agent.py dist/fulla
       - name: Checkout pinned shell-pa predecessor
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:

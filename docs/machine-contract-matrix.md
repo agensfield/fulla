@@ -52,13 +52,34 @@ workflow evidence; the full acceptance matrix retains remaining combinations.
 | `version` | None | Version envelope succeeds | Native packaged-binary acceptance |
 | `remote serve` | Protocol-owned streams; SSH access alone does not authorize operations | JSON refuses | Mutual remote session and real OpenSSH tests |
 
+## Authorized agent journey
+
+`scripts/acceptance-agent.py` runs the native binary without a controlling
+terminal on generated Git and no-Git stores. It covers 26 successful canonical
+leaves with Git and 22 without Git: explicit initialization, stdin/descriptor/
+generation input, exact raw/base64 output, CRUD, history, snapshots, native run,
+selected transfer, rotation continuity, full disaster restore, prune preview/apply,
+status, deep doctor, version, and completion generation.
+
+The native child checks process replacement, clean environment against a direct
+runtime control, mapped value, exact stdin/stderr, working directory, literal
+argv, process group/session, and exit status 23. Transfers use an independent
+recovery identity, verify without creating a selected store, and preserve shared
+names on import. Full restore compares every source path and file digest with
+required private modes; export may add exactly its validated publication receipt.
+Prune preview must leave all source contents and modes unchanged.
+
+CI runs the journey on Linux and macOS. The eight other leaves (copy, sync, five
+peer commands, remote serve) retain their specialized fixtures. This journey does
+not prove every channel, signal, interactive workflow, or authority combination.
+
 ## Remaining parity proof
 
 The baseline intentionally avoids invoking the user's clipboard, starting SSH
 connections, replacing the test process, consuming an inherited secret descriptor,
 or applying destructive commands. Those need their existing specialized fixtures
-and a complete per-channel/authority audit. In particular, comprehensive agent
-success journeys, controlling-terminal absence/availability for every interactive
+and a complete per-channel/authority audit. In particular, remaining agent
+success combinations, controlling-terminal absence/availability for every interactive
 workflow, and all signal/FD/process combinations remain part of J3/J1 in the
 full-spec acceptance matrix. No row equates a missing-operand refusal with an
 implemented successful workflow.

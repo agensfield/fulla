@@ -1264,3 +1264,28 @@ all TTY, descriptor, signal, and authority combinations. Those remain in J3/J1.
 The transaction-domain compatibility limitation is also retained: relaxing its
 version check would authorize writes into an unknown recovery format, so it
 needs a deliberate persisted-format design rather than a guard bypass.
+
+
+## Authorized native agent journey (2026-09-06)
+
+The new `scripts/acceptance-agent.py` passed locally against the current native
+binary with Git and without Git. CI now runs it on both hosted platforms.
+Generated disposable stores exercise 26 canonical successful leaves with Git,
+22 without, following the workflow documented in the machine contract matrix.
+The run target verifies native PID replacement, process group/session, clean
+environment, mapped value, binary stdin, exact stderr, cwd, literal `--json`
+argument after the delimiter, and propagation of exit status 23.
+
+Three initial harness assumptions were resolved by checking actual behavior and
+source, without production changes: macOS Python adds runtime environment keys
+(the assertion now uses a direct clean-launch control); full export publishes one
+non-secret receipt after capturing its archive (all preexisting bytes/modes must
+remain identical); archive restore intentionally normalizes Git's 0400 loose
+objects to private 0600 files (every path, byte digest, and normalized mode is
+still compared). These were acceptance assertion corrections, not product fixes.
+
+Ruff formatting/lint, basedpyright, actionlint, and the final expanded journey
+passed. The preceding `d3ae314` completed hosted CI successfully:
+https://github.com/agensfield/fulla/actions/runs/33996455364.
+J3 remains partial for specialized surfaces and exhaustive input/authority/signal
+combinations. No live pa store, clipboard, or remote host was used in this journey.
