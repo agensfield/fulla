@@ -1329,3 +1329,14 @@ Agent-journey commit `c93ed51` completed both hosted platforms successfully.
 The corrected expiry test passed 20 repetitions under the race detector locally
 (106.6 seconds). macOS CI at `e83a6e6` passed; the Linux failure was the receipt
 publication race described above.
+
+
+## Confirmed plugin shutdown hang (2026-09-06)
+
+The [bounded reproducer and investigation](plugin-lifecycle.md) confirms Fulla
+can remain stuck after a malformed plugin response when the plugin ignores
+SIGINT. The synthetic plugin explicitly records receiving that signal, proving
+the operation reached age's unbounded shutdown Wait rather than merely running
+slowly. The reproducer terminates only its own process group. Ruff and
+basedpyright passed. No production fix is claimed; lifecycle ownership and
+consistent packaged/go-install behavior remain required implementation work.
