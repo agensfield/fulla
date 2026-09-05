@@ -96,3 +96,35 @@ func TestReplacementDistinguishesPublicationFromDurability(t *testing.T) {
 		t.Fatal("left staging files", err)
 	}
 }
+
+func TestNewPublicationReportsDirectorySyncFailure(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	injected := errors.New("fixture sync failure")
+	published, err := publishNewPublished(root, "entry", []byte("new"), func(*os.Root, string) error { return injected })
+	if !published || !errors.Is(err, injected) {
+		t.Fatal("lost publication", published, err)
+	}
+	published, err = PublishNewPublished(root, "entry", []byte("overwrite"))
+	if published || err == nil {
+		t.Fatal("replaced existing file", published, err)
+	}
+	data, err := Read(root, "entry", 100)
+	if err != nil || string(data) != "new" {
+		t.Fatal("wrong bytes", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("staging remains", err)
+	}
+}

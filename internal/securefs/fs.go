@@ -210,20 +210,31 @@ func WriteNew(root *os.Root, name string, data []byte) (err error) {
 
 // PublishNew exposes only a complete synced file, with atomic no-replace rename.
 func PublishNew(root *os.Root, name string, data []byte) error {
+	_, err := PublishNewPublished(root, name, data)
+	return err
+}
+
+// PublishNewPublished distinguishes atomic no-replace publication from later
+// directory synchronization, without asserting durability after a sync failure.
+func PublishNewPublished(root *os.Root, name string, data []byte) (bool, error) {
+	return publishNewPublished(root, name, data, SyncDir)
+}
+
+func publishNewPublished(root *os.Root, name string, data []byte, syncParent func(*os.Root, string) error) (bool, error) {
 	parent, err := root.OpenRoot(filepath.Dir(name))
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer parent.Close()
 	tmp := ".fulla-stage-" + ID()
 	if err := WriteNew(parent, tmp, data); err != nil {
-		return err
+		return false, err
 	}
 	defer parent.Remove(tmp)
 	if err := RenameNew(parent, tmp, filepath.Base(name)); err != nil {
-		return err
+		return false, err
 	}
-	return SyncDir(parent, ".")
+	return true, syncParent(parent, ".")
 }
 
 // Replace atomically updates an already-owned file. No-replace publication is

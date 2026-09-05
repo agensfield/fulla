@@ -183,3 +183,95 @@ func TestPeerSyncMarkReportsAppliedFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestPeerSavePublicationAndRotationReceipts(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		for _, failure := range []string{"none", "finalization", "lock-release"} {
+			t.Run(fmt.Sprintf("rotate=%v/%s", replace, failure), func(t *testing.T) {
+				s := fixture(t, false)
+				identity, err := s.IdentityShow()
+				if err != nil {
+					t.Fatal(err)
+				}
+				original := Peer{Version: 1, Name: "fixture", Host: "fixture", Recipient: identity.Recipient, Fingerprint: identity.Fingerprint}
+				if replace {
+					if err := s.SavePeer(original, false, ""); err != nil {
+						t.Fatal(err)
+					}
+				}
+				_, recipient, err := crypt.Generate()
+				if err != nil {
+					t.Fatal(err)
+				}
+				next := original
+				next.Recipient = recipient
+				next.Fingerprint = crypt.Fingerprint(recipient)
+				err = s.savePeer(next, replace, original.Fingerprint, func() error {
+					switch failure {
+					case "finalization":
+						return errors.New("fixture finalization failure")
+					case "lock-release":
+						return securefs.Replace(s.Root, "lock/owner", []byte("different-owner\n"))
+					}
+					return nil
+				})
+				if failure == "none" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					var problem *fault.Error
+					if !errors.As(err, &problem) || problem.Status != 3 || problem.Details["applied"] != true {
+						t.Fatal("lost applied state", err)
+					}
+				}
+				saved, err := s.Peer(next.Name)
+				if err != nil || saved.Fingerprint != next.Fingerprint || saved.Activated || saved.DryRunIdentity != "" {
+					t.Fatal("incorrect live pin", err)
+				}
+				entries, err := os.ReadDir(filepath.Join(s.Dir, metadata, "receipts"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				rotations := 0
+				for _, entry := range entries {
+					data, err := os.ReadFile(filepath.Join(s.Dir, metadata, "receipts", entry.Name()))
+					if err != nil {
+						t.Fatal(err)
+					}
+					var receipt struct {
+						Command     string
+						Phase       string
+						Previous    Peer
+						Replacement Peer
+					}
+					if err := json.Unmarshal(data, &receipt); err != nil {
+						t.Fatal(err)
+					}
+					if receipt.Command != "peer rotate" {
+						continue
+					}
+					rotations++
+					phase := "applied"
+					if failure == "finalization" {
+						phase = "prepared"
+					}
+					if receipt.Phase != phase || receipt.Previous.Fingerprint != original.Fingerprint || receipt.Replacement.Fingerprint != next.Fingerprint {
+						t.Fatal("incorrect rotation evidence")
+					}
+				}
+				if (rotations == 1) != replace {
+					t.Fatal("unexpected rotation receipt count", rotations)
+				}
+				_, err = os.Stat(filepath.Join(s.Dir, "lock"))
+				if failure == "lock-release" {
+					if err != nil {
+						t.Fatal("removed changed lock", err)
+					}
+				} else if !os.IsNotExist(err) {
+					t.Fatal("retained lock", err)
+				}
+			})
+		}
+	}
+}

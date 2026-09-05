@@ -970,3 +970,34 @@ recovery program remains open.
 The full local Go 1.26.0 race suite and vet passed. Server-domain enforcement
 at `2bebb66` passed hosted Linux/macOS CI:
 https://github.com/agensfield/fulla/actions/runs/33992089407.
+
+
+## Peer enrollment and rotation publication evidence
+
+The publication-state audit also found SavePeer set its applied flag only after
+its filesystem helper returned success. Thus rename followed by directory-sync
+failure lost publication evidence. Rotation receipts also remained prepared after
+successful pin changes. Enrollment now uses PublishNewPublished, the no-replace
+counterpart to ReplacePublished, while rotation uses ReplacePublished. Both
+preserve applied status 3 when finalization fails after rename. Existing callers
+of PublishNew retain the original error-only interface and no-replace behavior.
+
+Successful rotation advances the public-trust receipt to applied, retaining the
+previous and replacement pin records. Receipt finalization failure reports the
+already-applied pin change rather than implying the old authorization remains.
+A failure before receipt finalization may still leave prepared evidence for manual
+inspection; automatic abrupt-death reconciliation remains open.
+
+Six store cases cover enrollment/rotation crossed with success, injected
+post-publication failure, and changed-owner lock-release failure. They inspect the
+actual live fingerprint, cleared prior activation/dry-run state, receipt phases
+and both pin records, and lock cleanup/preservation. Filesystem acceptance injects
+failure after no-replace rename, verifies visible new bytes and publication state,
+then proves another creation refuses to replace those bytes and leaves no stage.
+The tests do not equate publication with durability after failed fsync.
+
+The preceding sync-mark fix at `5270eb2` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33992357335.
+
+The complete local Go 1.26.0 race suite and vet passed for the enrollment and
+rotation publication changes.

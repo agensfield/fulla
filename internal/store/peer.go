@@ -143,7 +143,12 @@ func (s *Store) Peers() ([]Peer, error) {
 	return peers, nil
 }
 
-func (s *Store) SavePeer(p Peer, replace bool, expected string) (err error) {
+func (s *Store) SavePeer(p Peer, replace bool, expected string) error {
+	return s.savePeer(p, replace, expected, nil)
+}
+
+// afterPublish injects fixture failures without exposing runtime switches.
+func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish func() error) (err error) {
 	if err := s.RequireDomain("peers"); err != nil {
 		return err
 	}
@@ -189,19 +194,32 @@ func (s *Store) SavePeer(p Peer, replace bool, expected string) (err error) {
 	}
 	file := metadata + "/peers/" + p.Name + ".json"
 	// Persist old public trust evidence before changing the live pin.
+	receiptPath := ""
 	if replace {
+		receiptPath = metadata + "/receipts/" + securefs.ID() + ".json"
 		receipt, _ := json.Marshal(map[string]any{"version": 1, "command": "peer rotate", "previous": previous, "replacement": p, "phase": "prepared"})
-		if err := securefs.PublishNew(s.Root, metadata+"/receipts/"+securefs.ID()+".json", receipt); err != nil {
+		if err := securefs.PublishNew(s.Root, receiptPath, receipt); err != nil {
 			return err
 		}
-		err = securefs.Replace(s.Root, file, data)
+		applied, err = securefs.ReplacePublished(s.Root, file, data)
 	} else {
-		err = securefs.PublishNew(s.Root, file, data)
+		applied, err = securefs.PublishNewPublished(s.Root, file, data)
+	}
+	if err == nil && afterPublish != nil {
+		err = afterPublish()
 	}
 	if err != nil {
+		if applied {
+			return fault.Applied("peer saved but publication finalization failed", p.Name)
+		}
 		return err
 	}
-	applied = true
+	if replace {
+		receipt, _ := json.Marshal(map[string]any{"version": 1, "command": "peer rotate", "previous": previous, "replacement": p, "phase": "applied"})
+		if err := securefs.Replace(s.Root, receiptPath, receipt); err != nil {
+			return fault.Applied("peer rotated but receipt finalization failed", p.Name)
+		}
+	}
 	return nil
 }
 
