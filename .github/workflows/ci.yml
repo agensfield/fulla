@@ -59,11 +59,10 @@ jobs:
       - name: Real clipboard acceptance (macOS)
         if: runner.os == 'macOS'
         run: python3 scripts/acceptance-clipboard.py dist/fulla --real-clipboard
-      - name: Four-platform builds
+      - name: Reproducible four-platform packages and native smoke
         shell: bash
         run: |
-          for target_os in darwin linux; do
-            for target_arch in arm64 amd64; do
-              CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath -o "dist/fulla-$target_os-$target_arch" .
-            done
-          done
+          go run ./scripts/release --output dist/packages-a
+          go run ./scripts/release --output dist/packages-b
+          diff -r dist/packages-a dist/packages-b
+          python3 scripts/acceptance-release.py dist/packages-a "$(go run . --version)"
