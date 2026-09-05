@@ -1,21 +1,40 @@
 """Real pinned shell-pa compatibility; generated disposable stores only."""
 
+import contextlib
 import hashlib
 import json
 import os
+import select
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 PREDECESSOR = "f75734b8775f72d5d2f9630c08c2b48bdb6d8104"
-binary, repository, age_tools = [str(Path(arg).resolve()) for arg in sys.argv[1:4]]
+binary, repository, age_tools, sshd = [
+    str(Path(arg).resolve()) for arg in sys.argv[1:5]
+]
 source = subprocess.run(
     ["git", "-C", repository, "show", f"{PREDECESSOR}:pa"],
     capture_output=True,
     check=True,
 ).stdout
 _ = os.umask(0o077)
+
+
+def object_json(data: bytes | str) -> dict[str, object]:
+    value = cast(object, json.loads(data))
+    assert isinstance(value, dict)
+    return cast(dict[str, object], value)
+
+
+def result_json(data: bytes) -> dict[str, object]:
+    envelope = object_json(data)
+    assert envelope["schema"] == "fulla.cli/v1" and envelope["ok"] is True
+    result = envelope["data"]
+    assert isinstance(result, dict)
+    return cast(dict[str, object], result)
 
 
 def acceptance(no_git: bool) -> None:
@@ -48,7 +67,12 @@ def acceptance(no_git: bool) -> None:
 
         def run(command: list[str], data: bytes = b"", expected: int = 0) -> bytes:
             result = subprocess.run(
-                command, input=data, env=env, capture_output=True, timeout=30, check=False
+                command,
+                input=data,
+                env=env,
+                capture_output=True,
+                timeout=30,
+                check=False,
             )
             assert result.returncode == expected, (
                 f"fixture command {command[0]} failed: status={result.returncode}; "
@@ -70,7 +94,9 @@ def acceptance(no_git: bool) -> None:
 
         def snapshot() -> dict[str, str]:
             return {
-                str(item.relative_to(store)): hashlib.sha256(item.read_bytes()).hexdigest()
+                str(item.relative_to(store)): hashlib.sha256(
+                    item.read_bytes()
+                ).hexdigest()
                 for item in store.rglob("*")
                 if item.is_file()
             }
@@ -118,7 +144,9 @@ def acceptance(no_git: bool) -> None:
         lock = store / "lock"
         lock.mkdir(mode=0o700)
         _ = (lock / "owner").write_text("fixture-owner\n")
-        _ = (lock / "info").write_text(f"pid={os.getpid()} host=fixture operation=test\n")
+        _ = (lock / "info").write_text(
+            f"pid={os.getpid()} host=fixture operation=test\n"
+        )
         locked = snapshot()
         _ = shell("edit", "--stdin", "binary", data=b"forbidden", expected=1)
         _ = fulla("edit", "binary", "--stdin", data=b"forbidden", expected=1)
@@ -126,6 +154,167 @@ def acceptance(no_git: bool) -> None:
         (lock / "owner").unlink()
         (lock / "info").unlink()
         lock.rmdir()
+        # Use real OpenSSH against two disposable loopback servers. Each server
+        # launches only the configured Fulla binary/store, never arbitrary exec.
+        with contextlib.ExitStack() as cleanup:
+            other = home / "other"
+            _ = run(
+                [binary, "--store", str(other), "init", "--no-git", "--yes", "--json"]
+            )
+            remote_value = b"remote-fixture\x00\xff\n"
+            _ = run(
+                [binary, "--store", str(other), "add", "remote-only", "--stdin"],
+                remote_value,
+            )
+            _ = run(
+                [binary, "--store", str(other), "add", "binary", "--stdin"],
+                b"shared-remote",
+            )
+
+            def stop(process: subprocess.Popen[bytes]) -> None:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        _ = process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        _ = process.wait(timeout=10)
+
+            def endpoint(target: Path, label: str) -> list[str]:
+                log = cleanup.enter_context((home / f"{label}.log").open("wb"))
+                process: subprocess.Popen[bytes] = subprocess.Popen(
+                    [
+                        sshd,
+                        "--dir",
+                        str(home / label),
+                        "--binary",
+                        binary,
+                        "--store",
+                        str(target),
+                        "--remote-port",
+                        "0",
+                    ],
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=log,
+                )
+                _ = cleanup.callback(stop, process)
+                assert process.stdout is not None
+                _ = cleanup.callback(process.stdout.close)
+                ready, _, _ = select.select([process.stdout], [], [], 15)
+                assert ready, "fixture SSH listener did not start"
+                info = object_json(cast(bytes, process.stdout.readline()))
+                address = info["address"]
+                assert isinstance(address, str)
+                port = address.rsplit(":", 1)[1]
+                options = ["--host", "fulla-fixture@127.0.0.1"]
+                for option in (
+                    f"Port={port}",
+                    f"IdentityFile={info['client_key']}",
+                    f"UserKnownHostsFile={info['known_hosts']}",
+                    f"GlobalKnownHostsFile={os.devnull}",
+                    "StrictHostKeyChecking=yes",
+                    "IdentitiesOnly=yes",
+                ):
+                    options.extend(["--ssh-option", option])
+                return options
+
+            _ = result_json(fulla("doctor", "--deep", "--json"))
+            _ = result_json(
+                run([binary, "--store", str(other), "doctor", "--deep", "--json"])
+            )
+            local_endpoint = endpoint(store, "local-sshd")
+            remote_endpoint = endpoint(other, "remote-sshd")
+            local_identity = result_json(fulla("identity", "show", "--json"))
+            remote_identity = result_json(
+                run([binary, "--store", str(other), "identity", "show", "--json"])
+            )
+            local_fingerprint = local_identity["fingerprint"]
+            remote_fingerprint = remote_identity["fingerprint"]
+            assert isinstance(local_fingerprint, str) and isinstance(
+                remote_fingerprint, str
+            )
+            _ = fulla(
+                "peer",
+                "add",
+                "other",
+                *remote_endpoint,
+                "--expect-fingerprint",
+                remote_fingerprint,
+                "--json",
+            )
+            _ = run(
+                [
+                    binary,
+                    "--store",
+                    str(other),
+                    "peer",
+                    "add",
+                    "other",
+                    *local_endpoint,
+                    "--expect-fingerprint",
+                    local_fingerprint,
+                    "--json",
+                ]
+            )
+            before_refusal = snapshot()
+            refused = object_json(fulla("sync", "other", "--json", expected=1))
+            assert snapshot() == before_refusal
+            error = refused["error"]
+            assert isinstance(error, dict) and error["code"] == "sync.dry_run_required"
+            before_sync = snapshot()
+            preview = result_json(fulla("sync", "other", "--dry-run", "--json"))
+            assert preview["pull"] == ["remote-only"] and preview["skipped"] == [
+                "binary"
+            ]
+            # Dry-run records trust evidence but preserves every live ciphertext.
+            after_preview = snapshot()
+            assert all(
+                after_preview[name] == digest
+                for name, digest in before_sync.items()
+                if not name.startswith(".fulla/")
+            )
+            applied = result_json(fulla("sync", "other", "--json"))
+            assert applied["activated"] and applied["pushed"] and applied["pulled"]
+            receipt_name = applied["receipt"]
+            assert isinstance(receipt_name, str)
+            receipt = object_json((store / receipt_name).read_text())
+            assert receipt["pa_xfer_retired"] is True
+            assert (
+                result_json(fulla("peer", "show", "other", "--json"))["activated"]
+                is True
+            )
+            assert (
+                result_json(
+                    run(
+                        [
+                            binary,
+                            "--store",
+                            str(other),
+                            "peer",
+                            "show",
+                            "other",
+                            "--json",
+                        ]
+                    )
+                )["activated"]
+                is True
+            )
+            assert shell("show", "remote-only") == remote_value
+            assert shell("show", "binary") == values["binary"]
+            for name, value in values.items():
+                expected_value = b"shared-remote" if name == "binary" else value
+                assert (
+                    run([binary, "--store", str(other), "show", name]) == expected_value
+                )
+            retry = result_json(fulla("sync", "other", "--json"))
+            assert retry["push"] == [] and retry["pull"] == []
+            assert not retry["pushed"] and not retry["pulled"]
+        preserved_metadata = {
+            name: digest
+            for name, digest in snapshot().items()
+            if name.startswith(".fulla/")
+        }
         # Basic rollback means cease invoking Fulla; no identity or live-format rewrite.
         _ = shell("add", "--stdin", "rollback", data=b"rollback\x00\xff\n")
         _ = shell("edit", "--stdin", "rollback", data=b"edited\n")
@@ -142,6 +331,11 @@ def acceptance(no_git: bool) -> None:
             == original["recipients"]
         )
         assert (store / "passwords/.git").is_dir() is (not no_git)
+        assert {
+            name: digest
+            for name, digest in snapshot().items()
+            if name.startswith(".fulla/")
+        } == preserved_metadata
         print(
             json.dumps(
                 {
@@ -153,7 +347,8 @@ def acceptance(no_git: bool) -> None:
                     "alternating_crud": True,
                     "shared_lock": True,
                     "basic_rollback": True,
-                    "sync_cutover": "separate acceptance required",
+                    "sync_cutover": True,
+                    "transport": "real OpenSSH, two loopback fixture stores",
                 }
             )
         )

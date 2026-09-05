@@ -870,3 +870,43 @@ real-pa modes passed locally, along with Ruff and basedpyright. The existing CI
 step automatically exercises both modes. Full adoption-plus-sync-cutover
 acceptance remains separate and incomplete; this does not authorize live-store
 adoption or cutover.
+
+
+## Combined real-pa adoption, sync activation, and rollback
+
+The real predecessor fixture now runs the previously separated adoption and sync
+steps as one continuous journey, for both Git and untracked pa stores. After
+alternating CRUD, both participating stores pass deep verification. Two disposable
+loopback SSH servers launch Fulla remote serve against their configured stores;
+the production client uses real OpenSSH with generated identities and pinned
+host keys. Public fingerprints are obtained independently from each local CLI,
+then both sides enroll through the public peer-add surface.
+
+Acceptance verifies first-sync refusal before dry-run without any local store
+change, the authenticated inventory plan, unchanged live ciphertext during
+preview, bidirectional application, preserved shared-name divergence, activation
+on both peers, and the local receipt's pa-xfer retirement flag. A second sync
+transfers nothing. After the fixture servers stop, shell-pa CRUD resumes on the
+adopted store; all Fulla metadata, receipts, backups, and peers remain byte-for-byte
+unchanged throughout that rollback. Original identity/recipient files remain
+unchanged, and the no-Git store stays untracked.
+
+The fixture server accepts `--remote-port 0` to write a known-hosts pin for its
+actual ephemeral listener; the established reverse-forwarding default remains
+available. CI builds this helper and runs the combined journey on both platforms.
+The helper is not linked into the Fulla binary. This is repeatable real-SSH
+loopback acceptance, not a claim of two physical hosts or network-failure testing.
+One-sided interrupted sync/retry is covered separately by production wire tests;
+the earlier real Mac/devbox drill remains separate evidence.
+
+Both fixture variants, Ruff, basedpyright, and Go vet for the SSH helper passed
+locally. The preceding no-Git checkpoint `f67d0c4` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33991562690.
+
+Reproduce after building the pinned age tools and fetching the predecessor:
+
+```sh
+GOTOOLCHAIN=go1.26.0 go build -o dist/fulla .
+GOTOOLCHAIN=go1.26.0 go build -o dist/acceptance-sshd ./scripts/acceptance-sshd
+python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools dist/acceptance-sshd
+```

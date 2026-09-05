@@ -27,7 +27,7 @@ func main() {
 	dir := flag.String("dir", "", "new fixture directory")
 	binary := flag.String("binary", "", "absolute Fulla binary")
 	store := flag.String("store", "", "absolute isolated store")
-	remotePort := flag.Int("remote-port", 40222, "loopback reverse forwarding port")
+	remotePort := flag.Int("remote-port", 40222, "loopback reverse forwarding port, or 0 for the actual local listener")
 	flag.Parse()
 	if !filepath.IsAbs(*dir) || !filepath.IsAbs(*binary) || !filepath.IsAbs(*store) {
 		panic("absolute fixture paths required")
@@ -58,10 +58,6 @@ func main() {
 	if err := os.WriteFile(filepath.Join(*dir, "client-key"), pem.EncodeToMemory(key), 0o600); err != nil {
 		panic(err)
 	}
-	knownHosts := fmt.Sprintf("[127.0.0.1]:%d %s", *remotePort, ssh.MarshalAuthorizedKey(hostSigner.PublicKey()))
-	if err := os.WriteFile(filepath.Join(*dir, "known-hosts"), []byte(knownHosts), 0o600); err != nil {
-		panic(err)
-	}
 	config := &ssh.ServerConfig{PublicKeyCallback: func(meta ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 		if meta.User() != "fulla-fixture" || !bytes.Equal(key.Marshal(), clientSigner.PublicKey().Marshal()) {
 			return nil, fmt.Errorf("fixture authentication rejected")
@@ -74,6 +70,15 @@ func main() {
 		panic(err)
 	}
 	defer listener.Close()
+	hostAddress := fmt.Sprintf("[127.0.0.1]:%d", *remotePort)
+	if *remotePort == 0 {
+		_, port, _ := net.SplitHostPort(listener.Addr().String())
+		hostAddress = "[127.0.0.1]:" + port
+	}
+	knownHosts := fmt.Sprintf("%s %s", hostAddress, ssh.MarshalAuthorizedKey(hostSigner.PublicKey()))
+	if err := os.WriteFile(filepath.Join(*dir, "known-hosts"), []byte(knownHosts), 0o600); err != nil {
+		panic(err)
+	}
 	info := map[string]any{"address": listener.Addr().String(), "remote_port": *remotePort, "user": "fulla-fixture", "client_key": filepath.Join(*dir, "client-key"), "known_hosts": filepath.Join(*dir, "known-hosts")}
 	data, _ := json.Marshal(info)
 	if err := os.WriteFile(filepath.Join(*dir, "info.json"), data, 0o600); err != nil {

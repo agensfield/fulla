@@ -49,7 +49,8 @@ jobs:
         run: |
           GOBIN="$PWD/dist/pa-tools" go install filippo.io/age/cmd/age@v1.3.2
           GOBIN="$PWD/dist/pa-tools" go install filippo.io/age/cmd/age-keygen@v1.3.2
-          python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools
+          go build -o dist/acceptance-sshd ./scripts/acceptance-sshd
+          python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools dist/acceptance-sshd
       - name: Isolated X11 clipboard dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth
