@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/remote"
@@ -24,11 +26,18 @@ func (a *App) peers(p invocation, s *store.Store) (any, error) {
 		return s.Peer(name)
 	}
 	if p.Command == "peer remove" {
-		if !p.has("yes") {
+		if !p.has("yes") && (p.has("json") || p.has("non-interactive")) {
 			return nil, fault.Interaction("peer removal requires --yes")
 		}
-		err := s.RemovePeer(name)
-		return map[string]any{"name": name, "removed": err == nil}, err
+		err := s.RemovePeerConfirmed(name, func(peer store.Peer) error {
+			return a.confirm(p, fmt.Sprintf("Remove peer %q at %q, fingerprint %q.\nThis revokes its saved Fulla authorization on this store.\nContinue? [y/N]: ", peer.Name, peer.Host, peer.Fingerprint))
+		})
+		removed := err == nil
+		var problem *fault.Error
+		if errors.As(err, &problem) && problem.Details["applied"] == true {
+			removed = true
+		}
+		return map[string]any{"name": name, "removed": removed}, err
 	}
 	if p.Command == "sync" {
 		peer, err := s.Peer(name)

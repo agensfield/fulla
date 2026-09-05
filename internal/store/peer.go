@@ -205,7 +205,10 @@ func (s *Store) SavePeer(p Peer, replace bool, expected string) (err error) {
 	return nil
 }
 
-func (s *Store) RemovePeer(name string) (err error) {
+func (s *Store) RemovePeer(name string) error { return s.RemovePeerConfirmed(name, nil) }
+
+// RemovePeerConfirmed holds the shared lock while confirming the current pin.
+func (s *Store) RemovePeerConfirmed(name string, confirm func(Peer) error) (err error) {
 	p, err := s.Peer(name)
 	if err != nil {
 		return err
@@ -214,7 +217,16 @@ func (s *Store) RemovePeer(name string) (err error) {
 	if err != nil {
 		return err
 	}
-	defer lock.Release()
+	applied := false
+	defer func() {
+		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
+			if applied {
+				err = fault.Applied("peer removed but shared lock release failed", name)
+			} else {
+				err = releaseErr
+			}
+		}
+	}()
 	again, err := s.Peer(name)
 	if err != nil {
 		return err
@@ -222,15 +234,26 @@ func (s *Store) RemovePeer(name string) (err error) {
 	if again.Fingerprint != p.Fingerprint {
 		return fault.New("peer.trust_mismatch", "peer changed during removal")
 	}
-	data, _ := json.Marshal(map[string]any{"version": 1, "command": "peer remove", "previous": p, "phase": "prepared"})
-	if err := securefs.PublishNew(s.Root, metadata+"/receipts/"+securefs.ID()+".json", data); err != nil {
+	if confirm != nil {
+		if err := confirm(again); err != nil {
+			return err
+		}
+	}
+	data, _ := json.Marshal(map[string]any{"version": 1, "command": "peer remove", "previous": again, "phase": "prepared"})
+	receipt := metadata + "/receipts/" + securefs.ID() + ".json"
+	if err := securefs.PublishNew(s.Root, receipt, data); err != nil {
 		return err
 	}
 	if err := s.Root.Remove(metadata + "/peers/" + name + ".json"); err != nil {
 		return err
 	}
+	applied = true
 	if err := securefs.SyncDir(s.Root, metadata+"/peers"); err != nil {
 		return fault.Applied("peer removed but directory synchronization failed", name)
+	}
+	data, _ = json.Marshal(map[string]any{"version": 1, "command": "peer remove", "previous": again, "phase": "applied"})
+	if err := securefs.Replace(s.Root, receipt, data); err != nil {
+		return fault.Applied("peer removed but receipt finalization failed", name)
 	}
 	return nil
 }

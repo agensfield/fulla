@@ -815,3 +815,29 @@ boundary remain open rather than being inferred from the version-check matrix.
 
 The complete local Go 1.26.0 race suite and vet passed, including the live
 manifest regression and 20 domain-version combinations.
+
+
+## Confirmed peer removal and applied receipts
+
+Human peer removal now confirms the current saved name, host, and fingerprint
+with a default-no controlling-terminal prompt explaining local authorization
+revocation. The shared store lock spans re-reading the pin, confirmation, and
+removal. JSON/noninteractive callers still require --yes; cancellation writes
+neither a peer change nor a prepared removal receipt.
+
+Successful deletion now advances the retained public-trust receipt from prepared
+to applied after synchronizing the peer directory. Receipt-finalization or lock
+release failure after deletion returns an applied status-3 error, and the CLI
+reports removed=true for that outcome. Previously release errors were ignored
+and the receipt stayed prepared even after successful removal.
+
+Store tests prove locked confirmation, no peer/receipt change on cancellation,
+current fingerprint evidence, applied receipt content, and status 3 when a fixture
+changes lock ownership before release. Real PTY acceptance covers machine-mode
+refusal, default-no decline, SIGTERM cleanup, quoted public evidence, and accepted
+removal using an isolated synthetic peer. No network connection or live peer
+record is used. Abrupt-death recovery between deletion and receipt finalization
+remains part of the broader crash-acceptance work.
+
+Local full Go 1.26.0 race suite, final peer-removal/CLI/remote race tests, vet,
+real PTY acceptance, Ruff, and basedpyright passed.

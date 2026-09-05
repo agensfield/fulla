@@ -1,6 +1,7 @@
 """Isolated controlling-terminal acceptance. Only generated fixture data is used."""
 
 import errno
+import hashlib
 import json
 import os
 import pty
@@ -562,10 +563,47 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
         imported / "identities"
     ).read_bytes()
 
+    peer_file = store / ".fulla/peers/remove-fixture.json"
+    recipient = (store / "recipients").read_text().strip()
+    fingerprint = "SHA256:" + hashlib.sha256(recipient.encode()).hexdigest()
+    peer_bytes = json.dumps(
+        {
+            "version": 1,
+            "name": "remove-fixture",
+            "host": "fixture.invalid",
+            "recipient": recipient,
+            "fingerprint": fingerprint,
+        }
+    ).encode()
+    _ = peer_file.write_bytes(peer_bytes)
+    peer_file.chmod(0o600)
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(["peer", "remove", "remove-fixture", *flags], [])
+        assert (
+            code == 1
+            and b"Continue?" not in output
+            and peer_file.read_bytes() == peer_bytes
+        )
+    for response, expected in ((b"\n", 1), (signal.SIGTERM, 143), (b"y\n", 0)):
+        code, output = terminal(
+            ["peer", "remove", "remove-fixture"], [(b"Continue? [y/N]:", response)]
+        )
+        assert (
+            code == expected
+            and fingerprint.encode() in output
+            and b"revokes its saved Fulla authorization" in output
+        )
+        assert not (store / "lock").exists()
+        if expected == 0:
+            assert not peer_file.exists()
+        else:
+            assert peer_file.read_bytes() == peer_bytes
+
 print(
     json.dumps(
         {
             "plugin_terminal_interaction": True,
+            "peer_removal_confirmation": True,
             "terminal_scoped_recovery": True,
             "encrypted_ssh_terminal_unlocking": True,
             "full_restore_confirmation_and_plugin": True,
