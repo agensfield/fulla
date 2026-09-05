@@ -89,7 +89,7 @@ acceptance. All leaves must remain accounted for in the machine/TTY matrix.
 | --- | --- | --- |
 | Public Agensfield repository | Public `agensfield/fulla`, pushed main; scoped history and CI receipts in the ledger. | Keep exact-SHA verification and clean worktree at each release checkpoint. |
 | Four-platform binaries/checksums/source | [Packager and acceptance](distribution.md), repeated byte-identical builds, native smoke on Linux/macOS CI. | These are untagged development artifacts, not publication approval or installed-user acceptance. |
-| Preview `v0.1.0` | CI covers race/vet, TTY, clipboard, real pa, and reproducible packages. | Complete required journeys, compatibility/migration gates, known limitations, tag-gated publication, asset verification, and go-install proof. |
+| Preview `v0.1.0` | CI covers race/vet, TTY, clipboard, real pa, and reproducible packages. | Complete required journeys, compatibility/migration gates, known limitations, [Tag-gated workflow](distribution.md) is implemented; actual hosted publication/attestation/asset verification and tagged go-install proof remain open. |
 | Agensfield Homebrew tap | Intended command is documented. | Fulla formula, release provenance, install and brew-test acceptance; no unrelated formula mutation. |
 | Stable `v1.0.0` | Isolated manual Mac/devbox drill and protocol-version fixtures exist. | Repeated real-store use on two real hosts, disaster/rotation drills, distinct-version rolling upgrade, signed artifacts and security review. Live-user cutover remains deferred. |
 | Vault closure | Scoped implementation ledger and overview are regularly published. | Final requirement-by-requirement closure, with unresolved items explicitly retained; current goal remains active. |

@@ -35,9 +35,27 @@ type member struct {
 func main() {
 	output := flag.String("output", "dist/release", "new output directory (must not exist)")
 	version := flag.String("version", cli.Version, "version, matching the source CLI version")
+	check := flag.String("check-tag", "", "verify publication tag without creating artifacts")
+	eventSHA := flag.String("event-sha", "", "exact Git object from the release event")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "release takes no positional arguments")
+		os.Exit(2)
+	}
+	if *check != "" {
+		source, err := checkTag(cli.Version, *check, *eventSHA)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(source); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *eventSHA != "" {
+		fmt.Fprintln(os.Stderr, "event-sha requires check-tag")
 		os.Exit(2)
 	}
 	if err := run(*version, *output); err != nil {

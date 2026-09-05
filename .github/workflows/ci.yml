@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -93,3 +94,11 @@ jobs:
           go run ./scripts/release --output dist/packages-b
           diff -r dist/packages-a dist/packages-b
           python3 scripts/acceptance-release.py dist/packages-a "$(go run . --version)"
+      - name: Retain verified release packages
+        if: runner.os == 'Linux' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fulla-release-${{ github.sha }}
+          path: dist/packages-a/*
+          if-no-files-found: error
+          retention-days: 7

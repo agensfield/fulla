@@ -1462,3 +1462,30 @@ stage name). The worktree was unchanged by the negative-control run.
 The broader archive/restore group passed under the race detector (57.8 seconds),
 and store/CLI vet plus diff checks passed. Prior 6e42c06 completed Linux/macOS CI:
 https://github.com/agensfield/fulla/actions/runs/33998879946.
+
+
+## Exact-source release workflow preparation (2026-09-06)
+
+The new tag-triggered release workflow validates the exact event/tag/checkout
+commit, origin/main ancestry, source CLI version, clean checkout, and tracked
+nonempty nonsymlink release notes. The existing Linux/macOS CI workflow is now
+reusable; its tested Linux packages are retained only for tag runs and consumed
+after both platforms succeed. Publication verifies packages, signs provenance,
+verifies signer/source/tag identity, creates a new draft, downloads and checks
+its assets and attestation, and only then publishes. It rechecks the remote tag
+before creation/publication and never clobbers an existing release. A failed
+draft stays inspectable. Preview versions are marked prerelease/not latest.
+
+The source checker is read-only and creates no tags or artifacts. Nineteen
+real-Git cases passed under the race detector: six positive version/tag-form
+cases and thirteen refusal cases, including wrong tag/event/checkout, unreviewed
+source, dirty checkout, development/invalid versions, and missing/empty/symlink
+notes. Both workflows passed actionlint; release-package vet and diff checks passed.
+Action versions and attestation verification options were checked against official
+upstream sources before pinning. No new runtime dependency was introduced.
+
+This prepares publication infrastructure; it does not satisfy the full-spec
+release gates or prove hosted OIDC/signing/draft/download behavior. No version
+was changed, tag created, or release published. Actual tag execution, attestation
+verification and installed-release/tap acceptance remain open. Prior b89142f
+completed hosted CI: https://github.com/agensfield/fulla/actions/runs/33999152217.
