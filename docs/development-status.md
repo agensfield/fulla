@@ -1235,3 +1235,32 @@ then recovered successfully with the newly claimed owner token, on Git and
 no-Git stores. CI now builds the current store-test fixture for this drill.
 Ruff, basedpyright, actionlint, and diff checks passed. Prior `cbe2510` completed
 hosted CI: https://github.com/agensfield/fulla/actions/runs/33994967310.
+
+## Canonical command machine-contract baseline
+
+The [machine input/authority matrix](machine-contract-matrix.md) now lists all 34
+canonical command leaves with explicit input/authority, baseline outcome, and
+additional workflow evidence. A shared CLI test exercises one safe read/refusal
+case for every leaf on Git and no-Git stores in JSON mode, and repeats all 30
+non-passthrough cases with `--non-interactive`: 128 cases in total.
+
+The test supplies an instrumented, unselected stdin reader and asserts it is
+never consumed. JSON cases require exactly one `fulla.cli/v1` document, canonical
+command, matching status/ok, data/warnings on success, and symbolic code/message/
+details on failure. Raw show preserves bytes in noninteractive human mode;
+metadata and diagnostics cannot contain the selected fixture's plaintext/base64
+value. Before/after comparisons include the complete fixture tree, file contents,
+and modes. Prune without `--yes` remains an unchanged preview. Clipboard and SSH
+cases refuse before backend/transport use, and JSON passthrough cases refuse
+before executing child/protocol streams.
+
+All 34 rows passed initially; no production fix was needed. The full local CLI
+race suite and vet passed, and the final expanded matrix passed separately under
+the race detector. A static check confirms the 34 unique test rows and documented
+rows agree; diff checks pass. Prior `f6cca49` and `cb4ae83` both completed hosted CI.
+
+This is a shared baseline, not a substitute for authorized success journeys or
+all TTY, descriptor, signal, and authority combinations. Those remain in J3/J1.
+The transaction-domain compatibility limitation is also retained: relaxing its
+version check would authorize writes into an unknown recovery format, so it
+needs a deliberate persisted-format design rather than a guard bypass.
