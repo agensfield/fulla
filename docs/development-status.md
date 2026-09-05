@@ -486,3 +486,37 @@ and filter behavior remain part of the broader security review.
 The full Go 1.26.0 race suite and vet passed, along with Ruff/basedpyright for
 the new harness. The preceding killed-rotation checkpoint `486618c` passed
 hosted Linux/macOS CI: https://github.com/agensfield/fulla/actions/runs/33986026518.
+
+
+## Git ciphertext conversion preflight
+
+An isolated real-Git probe configured a clean filter that replaced an entry with
+a fixture marker during `git add`. Fulla returned success and its live ciphertext
+remained readable, but the committed blob was not age ciphertext and historical
+restore failed. This was a history-integrity bug, not merely an untested feature.
+
+Internal Git status now follows non-executing attribute inspection of existing
+entries and pa's root `.gitattributes`; transaction preflight also checks future
+entry names before publication. Converting attributes fail with
+`git.conversion_unsupported`. Filter and working-tree-encoding declarations are
+conservatively rejected, including explicit unset forms because Git's text
+report cannot distinguish those from a literal value named `unset`. Text/EOL/ident
+conversion settings are refused; `-text` and pa's `diff=age` remain supported.
+Internal Git disables implicit `core.autocrlf` conversion without editing user
+configuration. Explicit expert Git remains under the caller's control.
+
+Regression fixtures assert no filter subprocess runs, no live entry or Git head
+changes, no backup is created, and locks are released for both new and existing
+names. Attribute cases include `filter=unset` and `filter=unspecified` so ambiguous
+output does not bypass the guard. This does not claim isolation from same-account
+processes changing Git configuration concurrently.
+
+The check uses Git's own attribute precedence and NUL-delimited output:
+https://git-scm.com/docs/git-check-attr. The prior real-pa checkpoint `a731083`
+passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33986364480.
+
+Commit also repeats the conversion check before staging, so resumed recovery
+fails closed if conversion rules changed during interruption. Local Go 1.26.0
+full race/vet and real shell-pa acceptance passed; focused conversion and killed
+rotation recovery tests passed after adding this final commit-time check.

@@ -48,6 +48,14 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		_ = lock.Release()
 		return result, err
 	}
+	prospective := make([]string, 0, len(values))
+	for name := range values {
+		prospective = append(prospective, name)
+	}
+	if err := s.checkGitConversions(prospective); err != nil {
+		_ = lock.Release()
+		return result, err
+	}
 	if _, err := s.CleanGit(); err != nil {
 		_ = lock.Release()
 		return result, err

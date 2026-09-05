@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) Git(args ...string) ([]byte, error) {
-	a := []string{"-C", s.PasswordDirectory(), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0"}
+	a := []string{"-C", s.PasswordDirectory(), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "core.autocrlf=false"}
 	// Automatic maintenance can detach, then mutate Git objects after this
 	// command returns and outside Fulla's lock/staging lifetime. Internal Git
 	// operations must not spawn it; explicit expert Git remains user-controlled.
@@ -46,6 +46,13 @@ func (s *Store) CleanGit() (bool, error) {
 	if err != nil || !enabled {
 		return enabled, err
 	}
+	names, err := s.Names()
+	if err != nil {
+		return true, err
+	}
+	if err := s.checkGitConversions(names); err != nil {
+		return true, err
+	}
 	out, err := s.Git("status", "--porcelain=v1", "--untracked-files=all")
 	if err != nil {
 		return true, err
@@ -63,6 +70,10 @@ func (s *Store) Commit(names []string, message string) error {
 	}
 	if len(names) == 0 {
 		return nil
+	}
+	// Recovery can resume after Git configuration changed while interrupted.
+	if err := s.checkGitConversions(names); err != nil {
+		return err
 	}
 	paths := []string{}
 	for _, name := range names {
