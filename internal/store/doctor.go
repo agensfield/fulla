@@ -5,16 +5,17 @@ import (
 	"errors"
 
 	"filippo.io/age"
-	"github.com/agensfield/fulla/internal/fault"
 )
 
 type DoctorResult struct {
-	Healthy bool      `json:"healthy"`
-	Deep    bool      `json:"deep"`
-	Entries int       `json:"entries"`
-	Git     bool      `json:"git"`
-	Lock    *LockInfo `json:"lock"`
-	Issues  []string  `json:"issues"`
+	Healthy bool           `json:"healthy"`
+	Deep    bool           `json:"deep"`
+	Entries int            `json:"entries"`
+	Git     bool           `json:"git"`
+	Lock    *LockInfo      `json:"lock"`
+	Issues  []string       `json:"issues"`
+	Backups *BackupSummary `json:"backups"`
+	Peers   int            `json:"peers"`
 }
 
 // structuralIdentity never attempts key unwrapping. It permits the public age
@@ -47,6 +48,27 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 		return r, err
 	}
 	r.Entries = len(names)
+	if err := s.Unlocked(); err != nil {
+		r.Healthy = false
+		if lock == nil {
+			r.Issues = append(r.Issues, "transaction.pending")
+		}
+	} else {
+		backups, err := s.BackupSummary()
+		if err != nil {
+			r.Healthy = false
+			r.Issues = append(r.Issues, "backup.invalid")
+		} else {
+			r.Backups = &backups
+		}
+	}
+	peers, err := s.Peers()
+	if err != nil {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "peer.invalid")
+	} else {
+		r.Peers = len(peers)
+	}
 	// The official parser receives an inert identity. It parses the age header
 	// without unwrapping a file key or decrypting content; no plugins run.
 	for _, name := range names {
@@ -62,8 +84,8 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 		}
 	}
 	if deep {
-		if lock != nil {
-			return r, fault.New("store.locked", "deep verification refuses a locked store")
+		if err := s.Unlocked(); err != nil {
+			return r, err
 		}
 		if err := s.DeepVerify(); err != nil {
 			return r, err

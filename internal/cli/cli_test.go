@@ -151,3 +151,55 @@ func TestBackupPruneCLIPreviewsBeforeExplicitApplication(t *testing.T) {
 		t.Fatal("wrong retained set", code)
 	}
 }
+
+func TestDoctorUnhealthyIsNonzeroWithReport(t *testing.T) {
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "store")
+	invoke := func(args ...string) (int, map[string]any) {
+		var out bytes.Buffer
+		a := App{In: bytes.NewReader([]byte("fixture")), Out: &out, Getenv: func(k string) string {
+			if k == "HOME" {
+				return home
+			}
+			return ""
+		}}
+		code := a.Main(append([]string{"--store", dir, "--json"}, args...))
+		var result map[string]any
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return code, result
+	}
+	if code, _ := invoke("init", "--yes", "--no-git"); code != 0 {
+		t.Fatal(code)
+	}
+	if code, _ := invoke("add", "entry", "--stdin"); code != 0 {
+		t.Fatal(code)
+	}
+	code, result := invoke("status")
+	if code != 0 {
+		t.Fatal(code, result)
+	}
+	summary := result["data"].(map[string]any)["backups"].(map[string]any)
+	if summary["count"] != float64(1) || summary["bytes"].(float64) <= 0 || summary["oldest"] == "" {
+		t.Fatal("missing backup statistics", summary)
+	}
+	if code, _ := invoke("doctor"); code != 0 {
+		t.Fatal("healthy doctor", code)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "passwords", "entry.age"), []byte("invalid fixture ciphertext"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	code, result = invoke("doctor")
+	if code != 1 {
+		t.Fatal("unhealthy doctor succeeded", code, result)
+	}
+	problem := result["error"].(map[string]any)
+	report := problem["details"].(map[string]any)["report"].(map[string]any)
+	if problem["code"] != "doctor.unhealthy" || report["healthy"] != false || len(report["issues"].([]any)) == 0 {
+		t.Fatal("missing typed report", problem)
+	}
+}

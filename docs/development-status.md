@@ -190,3 +190,10 @@ covers recovery after loss of the deleted snapshot's own journal. Backup sorting
 now compares parsed instants, including differing fractional-second precision.
 `status` reports retained backup count, total bytes, oldest/newest timestamps,
 and oldest age in seconds.
+
+Doctor now includes backup statistics and peer-registry validation in structural
+inspection. An unhealthy report returns status 1 with `doctor.unhealthy` and a
+structured report in JSON error details; human diagnostics show the issues and
+lock ownership evidence. Deep verification refuses pending operations even when
+an orphaned journal has no lock directory. Permission repair, plugin inspection,
+and explicit private diagnostic reports remain required follow-through.

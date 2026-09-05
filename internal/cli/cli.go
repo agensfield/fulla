@@ -118,7 +118,14 @@ func (a *App) failure(command string, jsonMode bool, err error) int {
 		_ = json.NewEncoder(a.Out).Encode(envelope{Schema: "fulla.cli/v1", OK: false, Command: command, Error: e})
 	} else {
 		fmt.Fprintln(a.Err, e.Error())
-
+		if report, ok := e.Details["report"].(store.DoctorResult); ok {
+			for _, issue := range report.Issues {
+				fmt.Fprintf(a.Err, "  issue: %q\n", issue)
+			}
+			if report.Lock != nil {
+				fmt.Fprintf(a.Err, "  lock owner: pid=%d local=%t alive=%t token=%q\n", report.Lock.PID, report.Lock.Local, report.Lock.Alive, report.Lock.Token)
+			}
+		}
 	}
 	return e.Status
 }
@@ -310,7 +317,11 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return r, false, e
 		}
 		r, e := s.Doctor(p.has("deep"))
-
+		if e == nil && !r.Healthy {
+			problem := fault.New("doctor.unhealthy", "store requires attention; inspect the diagnostic report")
+			problem.Details["report"] = r
+			return nil, false, problem
+		}
 		return r, false, e
 	}
 	if err := s.Unlocked(); err != nil {
