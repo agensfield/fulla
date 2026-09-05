@@ -17,6 +17,18 @@ store has been changed. Public repository: https://github.com/agensfield/fulla.
 
 ## Required follow-through
 
+The next development checkpoint adds public history/snapshot restoration,
+complete encrypted before/after entry and Git snapshots, selected PAXFER1
+logical export/verify/import, and separate-recipient full-state disaster
+archives. Unit integration tests prove exact-byte scoped recovery, shared-name
+preservation, circular-protection rejection, and empty-target full restore.
+These are isolated generated stores, not real operational adoption evidence.
+
+The initial hosted CI run passed Linux/macOS race/static gates and four-platform
+cross-builds at commit `06a2452`:
+https://github.com/agensfield/fulla/actions/runs/33974687910.
+Vault checkpoint PR 212 merged and the canonical checkout fast-forwarded safely.
+
 All unchecked milestones in implementation-plan.md remain part of the goal.
 In particular, do not mistake helper-level recovery tests for the public
 doctor/recovery workflow or process-kill crash acceptance.

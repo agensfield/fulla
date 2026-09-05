@@ -16,7 +16,7 @@ type invocation struct {
 }
 
 var booleanFlags = map[string]bool{"json": true, "non-interactive": true, "yes": true, "help": true, "version": true, "stdin": true, "generate": true, "no-git": true, "adopt": true, "dry-run": true, "permanent-delete": true, "deep": true, "fix-permissions": true, "clean-env": true, "no-clear": true, "full": true, "fail-on-skip": true, "destroy-retired-key": true, "compromise": true}
-var valueFlags = map[string]bool{"store": true, "config": true, "from-fd": true, "length": true, "alphabet": true, "env": true, "inherit": true, "clear-after": true, "recipient": true, "identity": true, "output": true, "manifest": true, "passphrase-fd": true, "expect-fingerprint": true, "host": true, "remote-store": true, "acknowledge": true, "recover-lock": true, "older-than": true, "keep": true, "report": true}
+var valueFlags = map[string]bool{"store": true, "config": true, "from-fd": true, "length": true, "alphabet": true, "env": true, "inherit": true, "clear-after": true, "recipient": true, "identity": true, "output": true, "manifest": true, "passphrase-fd": true, "expect-fingerprint": true, "host": true, "remote-store": true, "acknowledge": true, "recover-lock": true, "older-than": true, "keep": true, "report": true, "phase": true, "remote-binary": true}
 
 func parse(args []string) (invocation, error) {
 	p := invocation{Args: []string{}, Flags: map[string][]string{}}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/agensfield/fulla/internal/config"
 	"github.com/agensfield/fulla/internal/fault"
+	"github.com/agensfield/fulla/internal/remote"
 	"github.com/agensfield/fulla/internal/store"
 )
 
@@ -61,6 +62,24 @@ func (a *App) Main(args []string) (status int) {
 	}()
 	if err != nil {
 		return a.failure(p.Command, jsonMode, err)
+	}
+	switch p.Command {
+	case "history", "backup", "peer", "identity", "transfer", "remote":
+		if len(p.Args) > 0 {
+			sub := p.Args[0]
+			switch sub {
+			case "ls":
+				sub = "list"
+			case "rm":
+				sub = "remove"
+			case "info":
+				sub = "show"
+			case "recover":
+				sub = "restore"
+			}
+			p.Command += " " + sub
+			p.Args = p.Args[1:]
+		}
 	}
 	if p.has("version") || p.Command == "version" {
 		if jsonMode {
@@ -118,6 +137,56 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, fault.Usage("unexpected passthrough arguments")
 	}
 	switch p.Command {
+	case "remote serve":
+		if err := p.allow(); err != nil {
+			return nil, false, err
+		}
+		if p.has("json") {
+			return nil, false, fault.Usage("remote serve owns protocol streams and does not support --json")
+		}
+	case "peer add", "peer rotate":
+		if err := p.allow("host", "remote-store", "remote-binary", "expect-fingerprint"); err != nil {
+			return nil, false, err
+		}
+	case "peer list", "peer show", "peer remove":
+		if err := p.allow(); err != nil {
+			return nil, false, err
+		}
+	case "sync":
+		if err := p.allow("dry-run", "fail-on-skip"); err != nil {
+			return nil, false, err
+		}
+	case "identity show":
+		if err := p.allow(); err != nil {
+			return nil, false, err
+		}
+	case "identity rotate":
+		if err := p.allow("destroy-retired-key", "acknowledge", "compromise"); err != nil {
+			return nil, false, err
+		}
+	case "backup export":
+		if err := p.allow("full", "recipient", "passphrase-fd", "output"); err != nil {
+			return nil, false, err
+		}
+	case "transfer export":
+		if err := p.allow("recipient", "output", "manifest", "passphrase-fd"); err != nil {
+			return nil, false, err
+		}
+		if p.value("output") == "-" && p.has("json") {
+			return nil, false, fault.Usage("binary export to stdout does not support --json")
+		}
+	case "transfer verify", "transfer import":
+		if err := p.allow("identity", "passphrase-fd"); err != nil {
+			return nil, false, err
+		}
+	case "history list", "history show", "history restore", "backup list", "backup show":
+		if err := p.allow(); err != nil {
+			return nil, false, err
+		}
+	case "backup restore":
+		if err := p.allow("phase", "full", "identity", "passphrase-fd"); err != nil {
+			return nil, false, err
+		}
 	case "doctor":
 		if err := p.allow("deep", "recover-lock"); err != nil {
 			return nil, false, err
@@ -151,6 +220,28 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	c, err := config.Resolve(config.Flags{Store: p.value("store"), Config: p.value("config")}, a.Getenv)
 	if err != nil {
 		return nil, false, err
+	}
+	if p.Command == "transfer verify" {
+		r, e := a.transfer(p, nil)
+		return r, false, e
+	}
+	if p.Command == "backup restore" && p.has("full") {
+		if len(p.Args) != 1 || p.has("phase") {
+			return nil, false, fault.Usage("full restore requires one archive path and no snapshot phase")
+		}
+		if !p.has("yes") {
+			return nil, false, fault.Interaction("full restore requires --yes and an empty target; it clones identity and peer authority")
+		}
+		ids, e := transferIdentities(p, nil)
+		if e != nil {
+			return nil, false, e
+		}
+		data, e := store.ReadArtifact(p.Args[0], store.MaxBundleBytes)
+		if e != nil {
+			return nil, false, e
+		}
+		r, e := store.RestoreFull(data, ids, c.StorePath)
+		return r, false, e
 	}
 	if p.Command == "init" {
 		if len(p.Args) != 0 {
@@ -187,6 +278,49 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	}
 	if err := s.Unlocked(); err != nil {
 		return nil, false, err
+	}
+	if p.Command == "remote serve" {
+		if len(p.Args) != 0 {
+			return nil, false, fault.Usage("remote serve takes no positional arguments")
+		}
+		return nil, true, remote.Serve(s, a.In, a.Out)
+	}
+	if p.Command == "sync" || p.Command == "peer add" || p.Command == "peer rotate" || p.Command == "peer list" || p.Command == "peer show" || p.Command == "peer remove" {
+		r, e := a.peers(p, s)
+		return r, false, e
+	}
+	if p.Command == "identity show" || p.Command == "identity rotate" {
+		if len(p.Args) != 0 {
+			return nil, false, fault.Usage(p.Command + " takes no positional arguments")
+		}
+		if p.Command == "identity show" {
+			r, e := s.IdentityShow()
+			return r, false, e
+		}
+		if !p.has("yes") {
+			return nil, false, fault.Interaction("identity rotation requires --yes; peers will require explicit trust rotation")
+		}
+		r, e := s.Rotate(p.has("destroy-retired-key"), p.value("acknowledge"), p.has("compromise"))
+		return r, false, e
+	}
+	if p.Command == "backup export" {
+		if !p.has("full") || len(p.Args) != 0 || p.value("output") == "" || p.value("output") == "-" {
+			return nil, false, fault.Usage("backup export requires --full and --output PATH")
+		}
+		rs, e := exportRecipients(p)
+		if e != nil {
+			return nil, false, e
+		}
+		r, e := s.ExportFull(rs, p.value("output"))
+		return r, false, e
+	}
+	if p.Command == "transfer export" || p.Command == "transfer import" {
+		r, e := a.transfer(p, s)
+		return r, p.Command == "transfer export" && p.value("output") == "-", e
+	}
+	if p.Command == "history list" || p.Command == "history show" || p.Command == "history restore" || p.Command == "backup list" || p.Command == "backup show" || p.Command == "backup restore" {
+		r, e := a.recovery(p, s)
+		return r, false, e
 	}
 	if p.Command == "run" {
 		return nil, true, a.run(p, c, s)
