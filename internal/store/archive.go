@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -154,7 +155,8 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (A
 }
 
 // RestoreFullConfirmed validates private staging before asking to publish it.
-// The callback receives only metadata; cancellation removes unpublished staging.
+// The callback receives only metadata; cancellation removes unpublished staging
+// or reports that private staging cleanup could not be confirmed.
 func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *crypt.UI, confirm func(ArchiveResult) error) (ArchiveResult, error) {
 	return restoreFullConfirmed(ciphertext, identities, target, ui, confirm, nil)
 }
@@ -211,7 +213,34 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 	if err := root.Mkdir(stage, 0o700); err != nil {
 		return result, err
 	}
-	defer root.RemoveAll(stage)
+	published := false
+	defer func() {
+		// Once renamed, this path no longer names our stage. Never remove a new
+		// occupant that happens to reuse the old staging name.
+		if published {
+			return
+		}
+		cleanupErr := root.RemoveAll(stage)
+		if cleanupErr == nil {
+			cleanupErr = securefs.SyncDir(root, ".")
+		}
+		if cleanupErr != nil {
+			failure := fault.New("recovery.cleanup_failed", "could not confirm removal of private restore staging")
+			failure.Details["cleanup_required"] = true
+			failure.Details["staging_path"] = filepath.Join(parent, stage)
+			failure.Details["target"] = target
+			failure.Details["applied"] = false
+			var original *fault.Error
+			if errors.As(err, &original) {
+				failure.Details["operation_code"] = original.Code
+				switch original.Status {
+				case 129, 130, 131, 143:
+					failure.Status = original.Status
+				}
+			}
+			err = failure
+		}
+	}()
 	staged, err := root.OpenRoot(stage)
 	if err != nil {
 		return result, err
@@ -312,6 +341,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 	if err := securefs.RenameNew(root, stage, filepath.Base(target)); err != nil {
 		return result, fault.New("recovery.publish_failed", "could not publish restore without replacement")
 	}
+	published = true
 	if err := checkpoint("published"); err != nil {
 		return result, fault.Applied("restore published but completion interrupted", "restore")
 	}

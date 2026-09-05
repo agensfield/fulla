@@ -1432,3 +1432,33 @@ https://github.com/agensfield/fulla/actions/runs/33998552265.
 
 The broader full/composite/transaction-snapshot/restore test group also passed
 under the race detector (53.4 seconds); store/CLI vet and diff checks passed.
+
+
+## Restore cleanup errors and path ownership (2026-09-06)
+
+Unpublished restore cleanup no longer discards RemoveAll errors. It removes the
+owned stage and syncs its parent; failure to confirm removal returns the typed
+recovery.cleanup_failed error with cleanup_required, exact staging_path/target,
+and applied=false. The original typed operation code is retained without raw
+message leakage. Signal exit statuses survive the cleanup-error report.
+
+A second defect was corrected: after the stage had been renamed into its target,
+the old deferred RemoveAll still addressed the former stage name. A concurrent
+new occupant at that name could be deleted. Publication now relinquishes cleanup
+of that obsolete name before any post-publication boundary.
+
+Tests use real chmod-based permission denial on a non-root runner, covering
+ordinary error, interaction refusal, and signal cancellation while confirming
+private identity material remains and the target is unpublished. A separate
+post-publication replacement fixture proves its new occupant is preserved and
+the published store remains valid. Targeted tests passed under the race detector.
+The restoration guidance distinguishes removal failure from uncertain deletion
+durability and retains automatic orphan inspection/cleanup as unfinished work.
+
+A temporary Go overlay restored the preceding archive implementation; both new
+regressions failed as expected (hidden cleanup failure and deletion of a reused
+stage name). The worktree was unchanged by the negative-control run.
+
+The broader archive/restore group passed under the race detector (57.8 seconds),
+and store/CLI vet plus diff checks passed. Prior 6e42c06 completed Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33998879946.
