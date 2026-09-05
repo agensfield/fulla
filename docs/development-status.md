@@ -699,3 +699,37 @@ acceptance and bounded wait/cancellation policy remain open.
 
 Local Go 1.26.0 full race suite and vet passed; final encrypted SSH unit tests
 also passed with race detection. PTY acceptance, Ruff, and basedpyright passed.
+
+
+## Controlling-terminal recovery passphrases
+
+The scoped recovery journey explicitly requires a strong passphrase obtained
+from the controlling TTY or an inherited descriptor. Only descriptors were
+previously implemented. --passphrase now selects hidden terminal input for
+logical transfer export/verify/import and full-state archive export/restore.
+Export requires two matching entries; reads request one. The existing 20-4096
+byte bound also applies to terminal input. --passphrase accepts no value, and
+conflicting recipient/identity/descriptor sources fail before input. Machine mode
+returns interaction.required instead of prompting. Snapshot restore rejects
+archive-only identity/passphrase options rather than silently ignoring them.
+
+Passphrase descriptor buffers are cleared after conversion to the string needed
+by age's scrypt API. Terminal input clears its accumulated bytes on failure and
+removed bytes on backspace. This is best-effort buffer hygiene, not a claim of
+eliminating all Go/library/OS memory copies.
+
+The PTY recovery fixture selects one exact manifest entry, exports with confirmed
+terminal protection, verifies without creating a live store, imports into an
+isolated store, and compares exact binary bytes and the one-entry inventory.
+It also covers short input, confirmation mismatch, SIGTERM, conflicting sources,
+machine-mode refusal, absence of output on failure, and hidden passphrases.
+
+Plugin wait investigation remains separate: age v1.3.2 ClientUI.WaitTimer is a
+notification callback without cancellation; its clientConnection.Close waits for
+the child after SIGINT without a deadline. A timer around an application goroutine
+would leave the process running and does not solve this lifecycle gap. No such
+workaround or timeout-completion claim has been added.
+
+The final PTY run also passed full-archive passphrase export/restore with exact
+bytes and original identity preserved. Local full Go race suite, final CLI race
+tests, vet, Ruff, and basedpyright passed.

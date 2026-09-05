@@ -30,3 +30,17 @@ through hidden controlling-terminal input; no decrypted identity is written.
 `--json`, `--non-interactive`, and remote handlers never prompt and return
 `interaction.required` if unlocking is necessary. Legacy encrypted PEM files
 without an embedded public key are unsupported.
+
+## Passphrase-protected recovery
+
+`fulla transfer export --manifest names.json --output capsule.age --passphrase`
+asks twice for a hidden recovery passphrase through the controlling terminal.
+The manifest is a JSON array of exact entry names. `transfer verify capsule.age
+--passphrase` verifies independently of a live store; `transfer import capsule.age
+--passphrase` imports without replacing existing entries. Full-state backup
+export/restore also accepts this protection source.
+
+`--passphrase` is a boolean input selector, never a secret argument. Use
+`--passphrase-fd N` for automation; JSON/noninteractive mode refuses terminal
+input. Passphrases must contain 20 to 4096 bytes. Store the recovery passphrase
+independently of the store being recovered.

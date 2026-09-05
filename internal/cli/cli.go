@@ -204,18 +204,18 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return nil, false, err
 		}
 	case "backup export":
-		if err := p.allow("full", "recipient", "passphrase-fd", "output"); err != nil {
+		if err := p.allow("full", "recipient", "passphrase-fd", "passphrase", "output"); err != nil {
 			return nil, false, err
 		}
 	case "transfer export":
-		if err := p.allow("recipient", "output", "manifest", "passphrase-fd"); err != nil {
+		if err := p.allow("recipient", "output", "manifest", "passphrase-fd", "passphrase"); err != nil {
 			return nil, false, err
 		}
 		if p.value("output") == "-" && p.has("json") {
 			return nil, false, fault.Usage("binary export to stdout does not support --json")
 		}
 	case "transfer verify", "transfer import":
-		if err := p.allow("identity", "passphrase-fd"); err != nil {
+		if err := p.allow("identity", "passphrase-fd", "passphrase"); err != nil {
 			return nil, false, err
 		}
 	case "history list", "history show", "history restore", "backup list", "backup show":
@@ -227,8 +227,11 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return nil, false, err
 		}
 	case "backup restore":
-		if err := p.allow("phase", "full", "identity", "passphrase-fd"); err != nil {
+		if err := p.allow("phase", "full", "identity", "passphrase-fd", "passphrase"); err != nil {
 			return nil, false, err
+		}
+		if !p.has("full") && (p.has("identity") || p.has("passphrase") || p.has("passphrase-fd")) {
+			return nil, false, fault.Usage("recovery identity and passphrase options require --full")
 		}
 	case "doctor":
 		if err := p.allow("deep", "recover-lock", "report", "fix-permissions"); err != nil {
@@ -440,6 +443,9 @@ const help = `Fulla: a local-first secret custodian (development build)
   fulla remove NAME                 Remove an entry
   fulla doctor --report PATH        Write a private redacted diagnostic report
   fulla doctor --fix-permissions    Explicitly repair safe private mode issues
+
+Recovery protection: --recipient RECIPIENT, --passphrase (hidden terminal input),
+  or --passphrase-fd N. --passphrase accepts no value; export confirms it twice.
 
 Global: --store PATH, --config PATH, --json, --non-interactive, --help, --version
 The remaining locked command domains are under implementation.`

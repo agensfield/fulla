@@ -11,6 +11,7 @@ import sys
 import tempfile
 import termios
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
@@ -36,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
 
     def terminal(
         args: list[str],
-        actions: list[tuple[bytes, bytes | int]],
+        actions: Sequence[tuple[bytes, bytes | int]],
         target: Path | None = None,
     ) -> tuple[int, bytes]:
         pid, fd = pty.fork()
@@ -456,10 +457,116 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     code, output = terminal(["show", "empty"], [ssh_pin], target=ssh_store)
     assert code == 0 and b"fixture-ssh-passphrase" not in output
 
+    capsule = home / "tty-recovery.age"
+    manifest = home / "recovery-manifest.json"
+    _ = manifest.write_text(json.dumps(["snapshot-base"]))
+    manifest.chmod(0o600)
+    export_args = [
+        "transfer",
+        "export",
+        "--manifest",
+        str(manifest),
+        "--output",
+        str(capsule),
+        "--passphrase",
+    ]
+    first_prompt = b"recovery passphrase (20-4096 bytes, hidden):"
+    confirm_prompt = b"confirm recovery passphrase (hidden):"
+    recovery_pin = b"fixture-recovery-passphrase-29\n"
+    for flags in (
+        ["--json"],
+        ["--non-interactive"],
+        ["--passphrase-fd", "0"],
+        ["--recipient", "invalid"],
+    ):
+        code, output = terminal(export_args + flags, [])
+        assert code in (1, 2) and first_prompt not in output and not capsule.exists()
+    for actions, expected in (
+        ([(first_prompt, b"short\n")], 1),
+        (
+            [
+                (first_prompt, recovery_pin),
+                (confirm_prompt, b"different-private-sentinel\n"),
+            ],
+            1,
+        ),
+        ([(first_prompt, recovery_pin), (confirm_prompt, signal.SIGTERM)], 143),
+    ):
+        code, output = terminal(export_args, actions)
+        assert code == expected and not capsule.exists()
+        assert not (store / "lock").exists()
+        assert (
+            b"fixture-recovery-passphrase-29" not in output
+            and b"different-private-sentinel" not in output
+        )
+    code, output = terminal(
+        export_args, [(first_prompt, recovery_pin), (confirm_prompt, recovery_pin)]
+    )
+    assert (
+        code == 0
+        and capsule.exists()
+        and b"fixture-recovery-passphrase-29" not in output
+    )
+    # Isolated verification must not create/open a live store.
+    isolated = home / "no-verification-store"
+    code, output = terminal(
+        ["transfer", "verify", str(capsule), "--passphrase"],
+        [(first_prompt, recovery_pin)],
+        target=isolated,
+    )
+    assert code == 0 and not isolated.exists()
+    imported = home / "capsule-import"
+    code, _ = terminal(["init", "--no-git", "--yes"], [], target=imported)
+    assert code == 0
+    code, output = terminal(
+        ["transfer", "import", str(capsule), "--passphrase"],
+        [(first_prompt, recovery_pin)],
+        target=imported,
+    )
+    assert code == 0
+    result = subprocess.run(
+        [binary, "--store", str(imported), "show", "snapshot-base"],
+        env=env,
+        capture_output=True,
+        check=True,
+        timeout=15,
+    )
+    assert result.stdout == snapshot_bytes
+    assert sorted(p.name for p in (imported / "passwords").iterdir()) == [
+        "snapshot-base.age"
+    ]
+
+    full_capsule = home / "tty-full.age"
+    code, output = terminal(
+        ["backup", "export", "--full", "--output", str(full_capsule), "--passphrase"],
+        [(first_prompt, recovery_pin), (confirm_prompt, recovery_pin)],
+        target=imported,
+    )
+    assert code == 0 and b"fixture-recovery-passphrase-29" not in output
+    full_restored = home / "tty-full-restored"
+    code, output = terminal(
+        ["backup", "restore", str(full_capsule), "--full", "--passphrase"],
+        [(first_prompt, recovery_pin), (b"Publish restored store? [y/N]:", b"y\n")],
+        target=full_restored,
+    )
+    assert code == 0 and b"fixture-recovery-passphrase-29" not in output
+    result = subprocess.run(
+        [binary, "--store", str(full_restored), "show", "snapshot-base"],
+        env=env,
+        capture_output=True,
+        check=True,
+        timeout=15,
+    )
+    assert result.stdout == snapshot_bytes
+    assert (full_restored / "identities").read_bytes() == (
+        imported / "identities"
+    ).read_bytes()
+
 print(
     json.dumps(
         {
             "plugin_terminal_interaction": True,
+            "terminal_scoped_recovery": True,
             "encrypted_ssh_terminal_unlocking": True,
             "full_restore_confirmation_and_plugin": True,
             "snapshot_restore_confirmation": True,

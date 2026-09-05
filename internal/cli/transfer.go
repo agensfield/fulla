@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -24,6 +26,7 @@ func passphraseFD(value string) (string, error) {
 	}
 	defer f.Close()
 	b, err := io.ReadAll(io.LimitReader(f, 4097))
+	defer clear(b)
 	if err != nil {
 		return "", fault.New("input.failed", "could not read passphrase descriptor")
 	}
@@ -34,11 +37,11 @@ func passphraseFD(value string) (string, error) {
 }
 
 func transferIdentities(p invocation, s *store.Store) ([]age.Identity, error) {
-	if p.has("identity") && p.has("passphrase-fd") {
+	if p.has("identity") && (p.has("passphrase-fd") || p.has("passphrase")) {
 		return nil, fault.Usage("select one recovery identity or passphrase source")
 	}
-	if p.has("passphrase-fd") {
-		value, err := passphraseFD(p.value("passphrase-fd"))
+	if p.has("passphrase-fd") || p.has("passphrase") {
+		value, err := recoveryPassphrase(p, false)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +62,7 @@ func transferIdentities(p invocation, s *store.Store) ([]age.Identity, error) {
 		ids, _, err := s.Keys()
 		return ids, err
 	}
-	return nil, fault.Interaction("isolated verification requires --identity PATH or --passphrase-fd N")
+	return nil, fault.Interaction("isolated verification requires --identity PATH or --passphrase / --passphrase-fd N")
 }
 
 func (a *App) transfer(p invocation, s *store.Store) (any, error) {
@@ -101,11 +104,11 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 }
 
 func exportRecipients(p invocation) ([]age.Recipient, error) {
-	if p.has("recipient") && p.has("passphrase-fd") {
+	if p.has("recipient") && (p.has("passphrase-fd") || p.has("passphrase")) {
 		return nil, fault.Usage("choose recipient protection or passphrase protection")
 	}
-	if p.has("passphrase-fd") {
-		value, err := passphraseFD(p.value("passphrase-fd"))
+	if p.has("passphrase-fd") || p.has("passphrase") {
+		value, err := recoveryPassphrase(p, true)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +119,46 @@ func exportRecipients(p invocation) ([]age.Recipient, error) {
 		return []age.Recipient{r}, nil
 	}
 	if !p.has("recipient") {
-		return nil, fault.Interaction("export requires --recipient or --passphrase-fd")
+		return nil, fault.Interaction("export requires --recipient, --passphrase, or --passphrase-fd")
 	}
 	return crypt.Recipients([]byte(strings.Join(p.Flags["recipient"], "\n")), commandIdentityUI(p))
+}
+
+// --passphrase selects terminal input; it never takes a secret argument.
+func recoveryPassphrase(p invocation, confirm bool) (string, error) {
+	if p.has("passphrase") && p.has("passphrase-fd") {
+		return "", fault.Usage("select one passphrase input source")
+	}
+	if p.has("passphrase-fd") {
+		return passphraseFD(p.value("passphrase-fd"))
+	}
+	if p.has("json") || p.has("non-interactive") {
+		return "", fault.Interaction("terminal passphrase input is unavailable in machine mode; use --passphrase-fd")
+	}
+	value, err := withTerminal("recovery passphrase requires a controlling terminal", func(ctx context.Context, tty *os.File) ([]byte, error) {
+		first, err := terminalLine(ctx, tty, "recovery passphrase (20-4096 bytes, hidden): ")
+		if err != nil {
+			clear(first)
+			return nil, err
+		}
+		if len(first) < 20 || len(first) > 4096 {
+			clear(first)
+			return nil, fault.New("recovery.weak_passphrase", "recovery passphrase must contain 20 to 4096 bytes")
+		}
+		if confirm {
+			second, err := terminalLine(ctx, tty, "confirm recovery passphrase (hidden): ")
+			defer clear(second)
+			if err != nil {
+				clear(first)
+				return nil, err
+			}
+			if !bytes.Equal(first, second) {
+				clear(first)
+				return nil, fault.New("recovery.passphrase_mismatch", "recovery passphrases did not match")
+			}
+		}
+		return first, nil
+	})
+	defer clear(value)
+	return string(value), err
 }

@@ -91,7 +91,7 @@ func withTerminal(required string, run func(context.Context, *os.File) ([]byte, 
 
 // Polling keeps terminal reads cancellable without a blocked reader restoring
 // terminal state after the descriptor has been closed or reused.
-func terminalLine(ctx context.Context, tty *os.File, prompt string) ([]byte, error) {
+func terminalLine(ctx context.Context, tty *os.File, prompt string) (result []byte, resultErr error) {
 	fd := int(tty.Fd())
 	state, err := term.MakeRaw(fd)
 	if err != nil {
@@ -102,6 +102,11 @@ func terminalLine(ctx context.Context, tty *os.File, prompt string) ([]byte, err
 		return nil, err
 	}
 	value := []byte{}
+	defer func() {
+		if resultErr != nil {
+			clear(value)
+		}
+	}()
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -144,6 +149,7 @@ func terminalLine(ctx context.Context, tty *os.File, prompt string) ([]byte, err
 		case 127, 8:
 			if len(value) > 0 {
 				_, size := utf8.DecodeLastRune(value)
+				clear(value[len(value)-size:])
 				value = value[:len(value)-size]
 			}
 		default:
