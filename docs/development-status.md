@@ -1001,3 +1001,30 @@ https://github.com/agensfield/fulla/actions/runs/33992357335.
 
 The complete local Go 1.26.0 race suite and vet passed for the enrollment and
 rotation publication changes.
+
+
+## Killed peer publication checkpoints
+
+Eight subprocess cases now kill the actual store writer after peer enrollment,
+peer rotation, dry-run marking, or activation publication, each with Git enabled
+and disabled. The fixture uses the test binary and existing internal publication
+hooks; production executables expose no failure switch. Rotation uses a genuinely
+different generated recipient pin, passed to the child as public metadata only.
+
+The cases verify a live owner cannot be recovered, a killed owner's lock blocks
+ordinary secret reads, and a wrong owner token cannot release it. Explicit
+matching-token recovery releases the dead owner's lock and accurately reports
+recovered=false because these operations have no pending transaction journal.
+The published peer fingerprint/host and dry-run/activation state remain intact;
+entry plaintext, ciphertext, and local identity material remain byte-for-byte
+unchanged. The rotation's prepared receipt retains both old and new public pins.
+
+This proves post-publication killed-owner state preservation and safe lock
+recovery. It also makes a remaining gap concrete: lock recovery does not reconcile
+that prepared rotation receipt to applied, and no pre-publication or removal
+boundary is covered here. These cases are not full peer-operation crash recovery
+or power-loss durability acceptance. A durable reconciliation design must preserve
+old-binary fail-closed behavior instead of silently adding an ignored journal.
+
+The targeted Go 1.26.0 race tests and store vet passed. The hosted full suite will
+exercise these cases on Linux/macOS as part of its existing race gate.
