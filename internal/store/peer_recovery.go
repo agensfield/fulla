@@ -88,14 +88,24 @@ func (s *Store) reconcilePeerReceipt(id string) error {
 
 // Called with the shared lock held, after preparing the receipt and before
 // changing the pin. The ID survives recovery ownership changes.
-func (s *Store) bindPeerReceipt(id string) error {
+func (s *Store) bindPeerReceipt(id string) (bool, error) {
 	if !validID(id) {
-		return fault.New("peer.recovery_invalid", "invalid peer receipt binding")
+		return false, fault.New("peer.recovery_invalid", "invalid peer receipt binding")
 	}
 	info, err := securefs.Read(s.Root, "lock/info", 4096)
 	if err != nil {
-		return err
+		return false, err
 	}
 	binding := strings.TrimSpace(string(info)) + " peer_receipt=" + id + "\n"
-	return securefs.Replace(s.Root, "lock/info", []byte(binding))
+	return securefs.ReplacePublished(s.Root, "lock/info", []byte(binding))
+}
+
+func peerRecoveryRequired(applied bool, name string) *fault.Error {
+	problem := fault.New("peer.incomplete", "peer operation incomplete; lock retained for explicit recovery")
+	if applied {
+		problem = fault.Applied("peer operation published but incomplete; lock retained for explicit recovery", name)
+	}
+	problem.Details["applied"] = applied
+	problem.Details["recovery_required"] = true
+	return problem
 }

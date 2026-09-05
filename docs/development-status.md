@@ -1111,3 +1111,32 @@ The killed-owner tests do not prove it.
 The full local Go 1.26.0 race suite and vet passed. Final targeted removal,
 rotation-reconciliation, killed-owner, and takeover/retry race cases and store
 vet also passed after adding the missing-registry guard.
+
+
+## Retained evidence after handled peer-operation errors
+
+Rotation and removal now retain their owned lock when an operation fails after
+its receipt binding has been published. The previous defer released that lock,
+deleting the binding and stranding prepared evidence. Binding publication is
+reported independently of its directory-sync result, so a binding that became
+visible before an fsync error is retained too. Errors state recovery_required=true
+and preserve whether the live peer operation published (status 3/applied=true)
+or failed before publication (peer.incomplete with applied=false).
+
+Four subprocess cases exercise handled post-publication errors for rotation and
+removal on Git/no-Git stores. The process reports the expected typed failure and
+exits normally. The parent verifies a dead-owner lock and receipt binding remain,
+ordinary secret reads are blocked, and matching-token recovery finalizes the
+receipt, releases the lock, and preserves the published authorization state and
+exact entry ciphertext/plaintext. These complement SIGKILL tests rather than
+using their result to infer normal-error behavior. The existing successful,
+cancellation, unbound enrollment, and changed-owner cases retain their policies.
+
+This fixes binding loss on the covered handled-failure path. Binding and operation
+pre-publication interruption, actual filesystem durability faults, and the wider
+acceptance matrix remain separate work; deterministic injected failures are not
+physical power-loss proof. The preceding removal recovery `f1f9b52` passed both
+hosted platforms: https://github.com/agensfield/fulla/actions/runs/33993589759.
+
+The complete local Go 1.26.0 race suite and vet passed, including the final
+normal-exit subprocess cases with bounded execution time.

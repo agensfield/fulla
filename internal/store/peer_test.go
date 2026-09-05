@@ -264,7 +264,7 @@ func TestPeerSavePublicationAndRotationReceipts(t *testing.T) {
 					t.Fatal("unexpected rotation receipt count", rotations)
 				}
 				_, err = os.Stat(filepath.Join(s.Dir, "lock"))
-				if failure == "lock-release" {
+				if failure == "lock-release" || (replace && failure == "finalization") {
 					if err != nil {
 						t.Fatal("removed changed lock", err)
 					}

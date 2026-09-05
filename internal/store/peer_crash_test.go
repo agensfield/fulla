@@ -34,6 +34,19 @@ func TestPeerCrashHelper(t *testing.T) {
 	}
 	pause := func() error { fmt.Println("peer-published"); time.Sleep(time.Minute); return nil }
 	switch operation := os.Getenv("FULLA_PEER_CRASH_OPERATION"); operation {
+	case "rotate-error", "remove-error":
+		failed := func() error { return errors.New("fixture handled publication error") }
+		if operation == "rotate-error" {
+			err = s.savePeer(p, true, os.Getenv("FULLA_PEER_CRASH_OLD_PIN"), failed)
+		} else {
+			err = s.removePeerConfirmed(p.Name, nil, failed)
+		}
+		var problem *fault.Error
+		if !errors.As(err, &problem) || problem.Status != 3 || problem.Details["applied"] != true || problem.Details["recovery_required"] != true {
+			t.Fatal("lost recoverable failure evidence", err)
+		}
+		fmt.Println("peer-error-retained")
+		return
 	case "recover":
 		_, err = s.Recover(os.Getenv("FULLA_PEER_CRASH_OLD_PIN"))
 		if err == nil {

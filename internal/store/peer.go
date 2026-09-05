@@ -160,7 +160,12 @@ func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish fun
 		return err
 	}
 	applied := false
+	bound := false
 	defer func() {
+		if err != nil && bound {
+			err = peerRecoveryRequired(applied, p.Name)
+			return
+		}
 		if e := lock.Release(); e != nil && err == nil {
 			if applied {
 				err = fault.Applied("peer saved but lock release failed", p.Name)
@@ -202,7 +207,8 @@ func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish fun
 		if err := securefs.PublishNew(s.Root, receiptPath, receipt); err != nil {
 			return err
 		}
-		if err := s.bindPeerReceipt(receiptID); err != nil {
+		bound, err = s.bindPeerReceipt(receiptID)
+		if err != nil {
 			return err
 		}
 		applied, err = securefs.ReplacePublished(s.Root, file, data)
@@ -244,7 +250,12 @@ func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, after
 		return err
 	}
 	applied := false
+	bound := false
 	defer func() {
+		if err != nil && bound {
+			err = peerRecoveryRequired(applied, name)
+			return
+		}
 		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
 			if applied {
 				err = fault.Applied("peer removed but shared lock release failed", name)
@@ -271,7 +282,8 @@ func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, after
 	if err := securefs.PublishNew(s.Root, receipt, data); err != nil {
 		return err
 	}
-	if err := s.bindPeerReceipt(receiptID); err != nil {
+	bound, err = s.bindPeerReceipt(receiptID)
+	if err != nil {
 		return err
 	}
 	if err := s.Root.Remove(metadata + "/peers/" + name + ".json"); err != nil {
