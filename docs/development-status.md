@@ -1140,3 +1140,31 @@ hosted platforms: https://github.com/agensfield/fulla/actions/runs/33993589759.
 
 The complete local Go 1.26.0 race suite and vet passed, including the final
 normal-exit subprocess cases with bounded execution time.
+
+
+## Transaction writes into future backup domains
+
+The full-contract audit reproduced a cross-domain compatibility bug: ordinary
+mutations checked only `transactions`, then published current-format snapshots
+into `backup` even when the live manifest advertised backup version 2. Journal
+finalization had the same omission. Four regression cases failed on the prior
+implementation: new mutation and interrupted-transaction finalization, each on
+Git and no-Git stores, all incorrectly succeeding.
+
+Mutation now checks the backup domain under its shared lock before staging;
+journal finalization rechecks before publishing entries, Git, backups, or
+receipts. The regression compares every store file after refusal, verifies
+independent reads remain available, and retries after undoing only the fixture's
+injected version change. This retry is not a real metadata downgrade.
+
+An older binary must not write a format it does not understand. This guard does
+not fulfill the complete older-binary CRUD promise: writes currently depend on
+the backup schema and refuse when that domain is unsupported. A compatible
+write/migration policy and actual prior-state upgrade fixtures remain open in
+the acceptance matrix. No new migration format or silent bypass was introduced.
+
+The four cases passed after the guard, including supported-version retry and
+read independence. The complete local Go 1.26.0 race suite and vet passed; the
+final expanded regression was also run separately under the race detector.
+The prior acceptance-matrix/legacy-pin checkpoint `da7fd0f` passed hosted CI:
+https://github.com/agensfield/fulla/actions/runs/33994466322.

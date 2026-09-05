@@ -48,6 +48,12 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		_ = lock.Release()
 		return result, err
 	}
+	// Every mutation publishes a backup, even a plain pa-v1 CRUD operation.
+	// Do not write the current snapshot schema into a newer backup domain.
+	if err := s.RequireDomain("backup"); err != nil {
+		_ = lock.Release()
+		return result, err
+	}
 	prospective := make([]string, 0, len(values))
 	for name := range values {
 		prospective = append(prospective, name)
@@ -165,6 +171,11 @@ func (s *Store) journalWrite(j *Journal) error {
 }
 
 func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
+	// Recovery can run in a newly opened binary after the manifest changed.
+	// Check before publishing entries, Git commits, snapshots, or receipts.
+	if err := s.RequireDomain("backup"); err != nil {
+		return err
+	}
 	if j.Version != 1 || !validID(j.ID) {
 		return fault.New("transaction.invalid", "invalid pending transaction")
 	}
