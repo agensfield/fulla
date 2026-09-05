@@ -123,8 +123,8 @@ func TestBackupPruneCLIPreviewsBeforeExplicitApplication(t *testing.T) {
 		}
 		return code, result
 	}
-	if code, _ := invoke("init", "--yes"); code != 0 {
-		t.Fatal(code)
+	if code, result := invoke("init", "--yes"); code != 0 {
+		t.Fatal("init", code, result)
 	}
 	for _, name := range []string{"a", "b", "c"} {
 		if code, _ := invoke("add", name, "--stdin"); code != 0 {
