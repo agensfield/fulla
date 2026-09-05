@@ -155,7 +155,18 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (A
 
 // RestoreFullConfirmed validates private staging before asking to publish it.
 // The callback receives only metadata; cancellation removes unpublished staging.
-func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *crypt.UI, confirm func(ArchiveResult) error) (result ArchiveResult, err error) {
+func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *crypt.UI, confirm func(ArchiveResult) error) (ArchiveResult, error) {
+	return restoreFullConfirmed(ciphertext, identities, target, ui, confirm, nil)
+}
+
+// afterPhase is an internal failure-injection seam, never a command option.
+func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *crypt.UI, confirm func(ArchiveResult) error, afterPhase func(string) error) (result ArchiveResult, err error) {
+	checkpoint := func(phase string) error {
+		if afterPhase != nil {
+			return afterPhase(phase)
+		}
+		return nil
+	}
 	result.Path = target
 	result.IdentityCloned = true
 	result.Warning = "This restore clones the original identity and peer authority. Use it to replace a lost machine, not to onboard a live peer."
@@ -243,6 +254,9 @@ func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 			return result, err
 		}
 		result.Files++
+		if err := checkpoint("file:" + name); err != nil {
+			return result, err
+		}
 	}
 	// Consume the authenticated age stream through EOF. A valid tar prefix is
 	// insufficient if a later ciphertext chunk is corrupt or truncated.
@@ -275,7 +289,10 @@ func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		return result, err
 	}
 	s.Close()
-	if err := securefs.SyncDir(staged, "."); err != nil {
+	if err := syncRestoreDirectories(staged, securefs.SyncDir); err != nil {
+		return result, err
+	}
+	if err := checkpoint("validated"); err != nil {
 		return result, err
 	}
 	result.Bytes = total
@@ -288,13 +305,45 @@ func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		if err := root.Remove(filepath.Base(target)); err != nil {
 			return result, fault.New("recovery.target_changed", "restore target is no longer empty")
 		}
+		if err := checkpoint("target-vacated"); err != nil {
+			return result, err
+		}
 	}
 	if err := securefs.RenameNew(root, stage, filepath.Base(target)); err != nil {
 		return result, fault.New("recovery.publish_failed", "could not publish restore without replacement")
 	}
+	if err := checkpoint("published"); err != nil {
+		return result, fault.Applied("restore published but completion interrupted", "restore")
+	}
 	if err := securefs.SyncDir(root, "."); err != nil {
 		return result, fault.Applied("restore published but parent synchronization failed", "restore")
 	}
+	if err := checkpoint("synced"); err != nil {
+		return result, fault.Applied("restore published but completion interrupted", "restore")
+	}
 	result.Bytes = total
 	return result, nil
+}
+
+// Files are synced when written. Persist every directory entry bottom-up too,
+// including empty directories and ancestors created by MkdirAll.
+func syncRestoreDirectories(root *os.Root, syncDir func(*os.Root, string) error) error {
+	var directories []string
+	if err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			directories = append(directories, name)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for i := len(directories) - 1; i >= 0; i-- {
+		if err := syncDir(root, directories[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }

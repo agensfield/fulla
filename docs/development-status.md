@@ -1402,3 +1402,33 @@ in J7; interrupted archive staging/publication, broader intrusion fixtures, and
 other full-spec gates remain open. The separate transaction-snapshot namespace
 archive test remains relevant. Plugin-shutdown commit e9dabe5 completed hosted CI
 on both platforms: https://github.com/agensfield/fulla/actions/runs/33998306333.
+
+
+## Full restore directory durability and interruption boundaries (2026-09-06)
+
+Restore staging previously synced each written file's immediate directory and
+finally the staging root, but did not explicitly sync all newly created ancestor
+or empty directories. The restore path now syncs every staged directory
+bottom-up after complete validation and before publication. A test exercises
+real sync calls while checking complete directory coverage and child-before-parent
+ordering; an injected error must propagate immediately.
+
+An internal callback seam exposes extraction, validated, empty-target-vacated,
+published, and parent-synced boundaries without adding command flags. Thirty-six
+Git/no-Git and absent/empty-target cases cover handled errors and actual SIGKILL
+(18 each). Pre-publication handled failures remove staging; killed processes
+leave one private stage, and fresh retry leaves that orphan unchanged. After
+publication the target matches every expected path, byte digest and mode, passes
+deep verification, and refuses an overwriting retry without mutation. Handled
+post-publication failures report applied status 3. Source state remains unchanged.
+
+The full matrix and sync test passed under the race detector (21.7 seconds).
+[Interrupted restore guidance](archive-recovery.md) records exact outcomes and
+remaining gaps: SIGKILL is not power-loss proof, a killed stage can retain active
+identity material under private modes, no prefix-based automatic deletion occurs,
+and explicit orphan identification/cleanup plus cleanup-operation failures remain
+open. Prior composite-restore commit 3c7446b passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33998552265.
+
+The broader full/composite/transaction-snapshot/restore test group also passed
+under the race detector (53.4 seconds); store/CLI vet and diff checks passed.
