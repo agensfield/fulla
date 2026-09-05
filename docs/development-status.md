@@ -1373,3 +1373,32 @@ restore confirmations, and editor signal cleanup. A temporary Go source overlay
 restored only upstream's original Close implementation; the new lifecycle test
 then failed deterministically with `shutdown required watchdog`. The actual
 worktree was not modified by that negative-control run.
+
+
+## Composite disaster restore acceptance (2026-09-06)
+
+`TestCompositeDisasterArchiveRestoresAllState` combines binary/empty/newline
+values, a deleted value, encrypted snapshots, Git history where enabled, two
+successive retained identity rotations, receipts, and saved activated peer
+metadata in one independently protected archive. The generated source directory
+is then removed before restoration. Both absent and existing-empty targets are
+covered on Git and no-Git stores, using only the archive and independent recovery
+identity for restore.
+
+Before exercising any recovery mutation, the test compares the complete restored
+path set, every file digest, and all required private modes against the source
+snapshot. Source export may add only its receipt and must preserve every prior
+path's contents/mode. Public identity, peer pins/dry-run/activation metadata,
+snapshot inventory, Git history, and exact live values are checked separately.
+Old-key snapshot restore recovers binary bytes and the deleted entry through the
+two-step retired-key chain. Git mode also overwrites a value and restores its
+pre-rotation history. Neither recovery operation changes restored peer authority.
+The peer record is generated metadata for archive acceptance, not a claim that
+this fixture performed real mutual SSH synchronization.
+
+All four combinations passed under the race detector (27.5 seconds test time).
+No production change was needed. This closes the missing composite state fixture
+in J7; interrupted archive staging/publication, broader intrusion fixtures, and
+other full-spec gates remain open. The separate transaction-snapshot namespace
+archive test remains relevant. Plugin-shutdown commit e9dabe5 completed hosted CI
+on both platforms: https://github.com/agensfield/fulla/actions/runs/33998306333.
