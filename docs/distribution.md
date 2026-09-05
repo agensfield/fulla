@@ -23,7 +23,8 @@ never replaces an existing archive. A failed build may leave partial output;
 Packages contain the binary, AGPL license, README, and `SOURCE.json` recording
 the exact source commit, version, module, and Go toolchain. Binary archives cover
 Darwin/Linux and amd64/arm64, with CGO disabled. The source archive contains the
-tracked tree of that commit. Tar ownership, modes, timestamps, gzip headers,
+tracked tree of that commit. Binaries build from an isolated extraction of that
+archive, so later working-tree edits cannot alter their recorded source. Tar ownership, modes, timestamps, gzip headers,
 build paths, and Go build IDs are normalized for repeatability with the same
 source and toolchain.
 

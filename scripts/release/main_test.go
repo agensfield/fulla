@@ -73,3 +73,24 @@ func TestReleaseVersionMustMatchSource(t *testing.T) {
 		}
 	}
 }
+
+func TestSourceSnapshotRejectsEscapeAndLinks(t *testing.T) {
+	for _, header := range []*tar.Header{
+		{Name: "../outside", Mode: 0600, Typeflag: tar.TypeReg},
+		{Name: "/outside", Mode: 0600, Typeflag: tar.TypeReg},
+		{Name: "link", Linkname: "/outside", Typeflag: tar.TypeSymlink},
+		{Name: "hard", Linkname: "outside", Typeflag: tar.TypeLink},
+	} {
+		var data bytes.Buffer
+		writer := tar.NewWriter(&data)
+		if err := writer.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := extractSource(t.TempDir(), data.Bytes()); err == nil {
+			t.Fatal("accepted unsafe source archive")
+		}
+	}
+}

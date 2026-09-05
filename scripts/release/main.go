@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,10 +121,15 @@ func run(version, output string) error {
 		return err
 	}
 	defer os.RemoveAll(temp)
+	if err := extractSource(temp, source); err != nil {
+		return err
+	}
+	snapshot := filepath.Join(temp, "fulla-"+version)
 	checksums := map[string]string{}
 	for _, target := range [][2]string{{"darwin", "amd64"}, {"darwin", "arm64"}, {"linux", "amd64"}, {"linux", "arm64"}} {
 		executable := filepath.Join(temp, "fulla-"+target[0]+"-"+target[1])
 		command := exec.Command("go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", executable, ".")
+		command.Dir = snapshot
 		command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+target[0], "GOARCH="+target[1], "GOFLAGS=", "GOWORK=off")
 		command.Stdout, command.Stderr = os.Stdout, os.Stderr
 		if err := command.Run(); err != nil {
@@ -217,4 +223,55 @@ func writeNew(name string, data []byte) (err error) {
 	}()
 	_, err = file.Write(data)
 	return err
+}
+
+// Only regular tracked files and directories are accepted into the immutable
+// build snapshot. Rooted I/O and local-path validation prevent archive escape.
+func extractSource(directory string, data []byte) error {
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	reader := tar.NewReader(bytes.NewReader(data))
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if header.Typeflag == tar.TypeXGlobalHeader {
+			continue
+		}
+		name := filepath.FromSlash(strings.TrimSuffix(header.Name, "/"))
+		if !filepath.IsLocal(name) {
+			return errors.New("source archive contains nonlocal path")
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := root.MkdirAll(name, 0700); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := root.MkdirAll(filepath.Dir(name), 0700); err != nil {
+				return err
+			}
+			file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, os.FileMode(header.Mode)&0755)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(file, reader)
+			closeErr := file.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		default:
+			return errors.New("source archive contains unsupported link or special file")
+		}
+	}
 }
