@@ -158,3 +158,9 @@ worker completion, and preservation of replacement values. The CLI harness is
 real-clipboard mode is restricted to disposable GitHub runners. CI now includes
 an isolated X11 display and the macOS runner's real pasteboard in addition to
 fixture tests. Local tests never accessed the user's clipboard.
+
+Hosted clipboard receipt at `4379fc8`:
+https://github.com/agensfield/fulla/actions/runs/33980733730. The real X11 and
+macOS clipboard jobs passed, alongside fixture/terminal acceptance, race tests,
+static analysis, and four-platform builds. Wayland currently has fixture and
+upstream-interface coverage; real compositor acceptance is still outstanding.
