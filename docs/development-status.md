@@ -435,3 +435,23 @@ items; this change closes the identified finalization ordering window.
 Go 1.26.0 targeted rotation tests, the full race suite, and vet passed. Snapshot
 restore checkpoint `7dc38fe` passed hosted Linux/macOS CI:
 https://github.com/agensfield/fulla/actions/runs/33985705977.
+
+
+## Killed-process rotation acceptance
+
+`TestRotationKilledOwnerRecovery` kills a real child process at five boundaries:
+publication of an entry, recipients, identities, the Git commit, and completed
+staging cleanup. Each boundary runs in continuity and explicit destructive mode
+against generated Git-backed stores. Recovery uses `Store.Recover` with the
+inspected owner token, rather than invoking journal finalization directly.
+
+The ten cases assert refusal to displace a live owner or accept a wrong token,
+ordinary-read refusal after interruption, exact binary live-value preservation,
+old-history accessibility only in continuity mode, no remaining private staging,
+and applied/destruction fields in the recovery receipt. The targeted Go 1.26.0
+race run and vet passed. The standard CI race suite includes these tests on both
+platforms. This extends process-death acceptance; it does not simulate power loss
+or cover every syscall, pre-journal boundary, or interrupted recovery invocation.
+
+The cleanup-order fix at `dacdceb` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33985877145.
