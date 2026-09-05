@@ -14,16 +14,17 @@ import (
 )
 
 type Peer struct {
-	Version        int    `json:"version"`
-	Name           string `json:"name"`
-	Host           string `json:"host"`
-	Store          string `json:"store"`
-	Binary         string `json:"binary"`
-	Recipient      string `json:"recipient"`
-	Fingerprint    string `json:"fingerprint"`
-	Enrolled       string `json:"enrolled"`
-	DryRunIdentity string `json:"dry_run_identity"`
-	Activated      bool   `json:"activated"`
+	Version        int      `json:"version"`
+	Name           string   `json:"name"`
+	Host           string   `json:"host"`
+	Store          string   `json:"store"`
+	Binary         string   `json:"binary"`
+	SSHOptions     []string `json:"ssh_options,omitempty"`
+	Recipient      string   `json:"recipient"`
+	Fingerprint    string   `json:"fingerprint"`
+	Enrolled       string   `json:"enrolled"`
+	DryRunIdentity string   `json:"dry_run_identity"`
+	Activated      bool     `json:"activated"`
 }
 
 func PeerName(name string) bool {
@@ -42,6 +43,21 @@ func PeerName(name string) bool {
 func ValidatePeer(p Peer) error {
 	if p.Version != 1 {
 		return fault.New("peer.unsupported", "unsupported peer metadata version")
+	}
+	if len(p.SSHOptions) > 32 {
+		return fault.Usage("too many SSH options")
+	}
+	allowed := map[string]bool{"Port": true, "User": true, "HostName": true, "IdentityFile": true, "IdentitiesOnly": true, "UserKnownHostsFile": true, "GlobalKnownHostsFile": true, "StrictHostKeyChecking": true, "ProxyJump": true, "ConnectTimeout": true, "ServerAliveInterval": true, "ServerAliveCountMax": true, "Compression": true}
+	for _, option := range p.SSHOptions {
+		key, value, ok := strings.Cut(option, "=")
+		if !ok || !allowed[key] || value == "" || len(value) > 4096 {
+			return fault.Usage("invalid SSH transport option; use a supported NAME=VALUE setting")
+		}
+		for _, c := range value {
+			if unicode.IsControl(c) {
+				return fault.Usage("SSH options cannot contain control characters")
+			}
+		}
 	}
 	if !PeerName(p.Name) {
 		return fault.Usage("peer name must use letters, digits, underscores, or hyphens")

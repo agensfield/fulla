@@ -51,7 +51,12 @@ func Dial(ctx context.Context, peer store.Peer) (Connection, error) {
 		remoteCommand += " --store " + quote(peer.Store)
 	}
 	remoteCommand += " --non-interactive remote serve"
-	cmd := exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "--", peer.Host, remoteCommand)
+	args := []string{"-o", "BatchMode=yes"}
+	for _, option := range peer.SSHOptions {
+		args = append(args, "-o", option)
+	}
+	args = append(args, "--", peer.Host, remoteCommand)
+	cmd := exec.CommandContext(ctx, "ssh", args...)
 	cmd.Stderr = io.Discard
 	input, err := cmd.StdinPipe()
 	if err != nil {

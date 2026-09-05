@@ -145,7 +145,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return nil, false, fault.Usage("remote serve owns protocol streams and does not support --json")
 		}
 	case "peer add", "peer rotate":
-		if err := p.allow("host", "remote-store", "remote-binary", "expect-fingerprint"); err != nil {
+		if err := p.allow("host", "remote-store", "remote-binary", "expect-fingerprint", "ssh-option"); err != nil {
 			return nil, false, err
 		}
 	case "peer list", "peer show", "peer remove":

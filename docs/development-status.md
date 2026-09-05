@@ -17,17 +17,36 @@ store has been changed. Public repository: https://github.com/agensfield/fulla.
 
 ## Required follow-through
 
-The next development checkpoint adds public history/snapshot restoration,
-complete encrypted before/after entry and Git snapshots, selected PAXFER1
-logical export/verify/import, and separate-recipient full-state disaster
-archives. Unit integration tests prove exact-byte scoped recovery, shared-name
-preservation, circular-protection rejection, and empty-target full restore.
-These are isolated generated stores, not real operational adoption evidence.
+Public history/snapshot restoration, encrypted before/after snapshots, selected
+PAXFER1 export/verify/import, full-state disaster archives, identity rotation,
+peer enrollment, and mutually authenticated SSH sync are implemented. Local
+unit/integration coverage includes successive rotation and sealed-key history
+recovery. These features still require the broader acceptance gates below.
 
-The initial hosted CI run passed Linux/macOS race/static gates and four-platform
-cross-builds at commit `06a2452`:
-https://github.com/agensfield/fulla/actions/runs/33974687910.
+Hosted Linux/macOS race/static gates and four-platform cross-builds passed at
+`831caf6`: https://github.com/agensfield/fulla/actions/runs/33976819325.
 Vault checkpoint PR 212 merged and the canonical checkout fast-forwarded safely.
+
+### Isolated cross-host acceptance (2026-09-05)
+
+A macOS arm64 client and Linux amd64 devbox used generated, disposable stores.
+The system OpenSSH transport used a temporary loopback reverse tunnel and a
+fixed-command SSH fixture from `scripts/acceptance-sshd`. This fixture is not
+linked into or distributed with Fulla. Saved peer transport options support
+explicit ports, identity files, and known-host files without changing SSH config.
+
+The drill verified independent mutual enrollment, the mandatory dry-run,
+bidirectional unique-name sync, byte-exact binary values, and preservation of
+different values under a shared name. Reverse-direction invocation also passed.
+Remote fixture identity rotation caused the saved pin to fail closed; explicit
+peer rotation and a fresh dry-run restored access. Strict shared-name skipping
+returned status 4. Both temporary SSH processes have exited.
+
+Local ignored receipts are `dist/acceptance/cross-host-receipt.json` and
+`dist/acceptance/cross-host-rotation-receipt.json`. They document this manual
+checkpoint, not reproducible CI acceptance or proof of all failure scenarios.
+No live pa store was adopted. The user explicitly deferred live adoption and
+sync cutover; that work remains separate from implementation and preview release.
 
 All unchecked milestones in implementation-plan.md remain part of the goal.
 In particular, do not mistake helper-level recovery tests for the public

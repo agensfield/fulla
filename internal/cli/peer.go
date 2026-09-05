@@ -44,6 +44,7 @@ func (a *App) peers(p invocation, s *store.Store) (any, error) {
 		return remote.Sync(s, peer, client, p.has("dry-run"), p.has("fail-on-skip"))
 	}
 	peer := store.Peer{Version: 1, Name: name, Host: p.value("host"), Store: p.value("remote-store"), Binary: p.value("remote-binary")}
+	peer.SSHOptions = p.Flags["ssh-option"]
 	expectedOld := ""
 	if p.Command == "peer rotate" {
 		previous, err := s.Peer(name)
@@ -59,6 +60,9 @@ func (a *App) peers(p invocation, s *store.Store) (any, error) {
 		}
 		if !p.has("remote-binary") {
 			peer.Binary = previous.Binary
+		}
+		if !p.has("ssh-option") {
+			peer.SSHOptions = previous.SSHOptions
 		}
 	}
 	identity, err := s.IdentityShow()

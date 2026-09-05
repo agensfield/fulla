@@ -16,7 +16,7 @@ type invocation struct {
 }
 
 var booleanFlags = map[string]bool{"json": true, "non-interactive": true, "yes": true, "help": true, "version": true, "stdin": true, "generate": true, "no-git": true, "adopt": true, "dry-run": true, "permanent-delete": true, "deep": true, "fix-permissions": true, "clean-env": true, "no-clear": true, "full": true, "fail-on-skip": true, "destroy-retired-key": true, "compromise": true}
-var valueFlags = map[string]bool{"store": true, "config": true, "from-fd": true, "length": true, "alphabet": true, "env": true, "inherit": true, "clear-after": true, "recipient": true, "identity": true, "output": true, "manifest": true, "passphrase-fd": true, "expect-fingerprint": true, "host": true, "remote-store": true, "acknowledge": true, "recover-lock": true, "older-than": true, "keep": true, "report": true, "phase": true, "remote-binary": true}
+var valueFlags = map[string]bool{"store": true, "config": true, "from-fd": true, "length": true, "alphabet": true, "env": true, "inherit": true, "clear-after": true, "recipient": true, "identity": true, "output": true, "manifest": true, "passphrase-fd": true, "expect-fingerprint": true, "host": true, "remote-store": true, "acknowledge": true, "recover-lock": true, "older-than": true, "keep": true, "report": true, "phase": true, "remote-binary": true, "ssh-option": true}
 
 func parse(args []string) (invocation, error) {
 	p := invocation{Args: []string{}, Flags: map[string][]string{}}
@@ -70,7 +70,7 @@ func parse(args []string) (invocation, error) {
 		}
 	}
 	for name, values := range p.Flags {
-		if len(values) > 1 && name != "env" && name != "inherit" && name != "recipient" {
+		if len(values) > 1 && name != "env" && name != "inherit" && name != "recipient" && name != "ssh-option" {
 			return p, fault.Usage("duplicate option: --" + name)
 		}
 	}
