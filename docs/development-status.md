@@ -1028,3 +1028,47 @@ old-binary fail-closed behavior instead of silently adding an ignored journal.
 
 The targeted Go 1.26.0 race tests and store vet passed. The hosted full suite will
 exercise these cases on Linux/macOS as part of its existing race gate.
+
+
+## Bound peer-rotation receipt reconciliation
+
+Peer rotation now records its exact prepared receipt ID in lock/info before
+publishing the replacement pin. The binding is a validated optional operation
+field, not a raw owner token, guessed timestamp, or scan of historical receipts.
+Recovery preserves it while replacing the dead owner's PID/token. A bound peer
+receipt conflicts with other pending journals instead of allowing mixed recovery.
+
+Under the recovery guard, Fulla strictly validates the bound rotation receipt
+and both public peer records. Exact equality with the replacement marks the
+receipt applied; exact equality with the previous record marks it aborted.
+Unexpected live state, contradictory phases, missing records, or unsupported
+peer metadata fail with the lock retained. Recovery never changes the live pin.
+Already finalized matching receipts are idempotent. Post-publication receipt
+sync failures preserve applied-state evidence, as do lock-release failures after
+reconciliation.
+
+The killed-process matrix now includes ten Git/no-Git cases, including the old
+lock-info format without a receipt binding. Bound rotation recovery finalizes its
+receipt and reports recovered=true. Legacy unbound recovery retains the previous
+recovered=false behavior and leaves historical prepared receipts for inspection;
+it never guesses that one belongs to this lock. A second subprocess test injects
+an unexplained live record, lets recovery take ownership and refuse it, kills that
+recovery process, restores only the fixture's deliberately changed record, and
+successfully retries with the new dead-owner token and preserved receipt binding.
+Unit cases cover old/new/ambiguous/contradictory states, unchanged authorization,
+and byte-identical repeated receipt reconciliation.
+
+Compatibility boundary: the live pa-v1 files, receipt v1 shape, and domain manifest
+remain unchanged. The optional lock-info field is used only by this recovery
+implementation. Complete an interrupted bound rotation with a Fulla build that
+supports this binding before rolling back to an older build; older builds can
+ignore the field and leave the receipt unresolved. No automatic migration of
+legacy ambiguous receipts is claimed. Pre-publication removal/enrollment failure
+boundaries and power-loss durability remain separate acceptance work.
+
+The prior killed-peer checkpoint `270a0c5` passed both hosted platforms:
+https://github.com/agensfield/fulla/actions/runs/33992813831.
+
+The full local Go 1.26.0 race suite and vet passed. The final ten-case killed
+writer matrix, reconciliation cases, and killed-recovery takeover/retry case
+also passed under race detection, followed by store vet.

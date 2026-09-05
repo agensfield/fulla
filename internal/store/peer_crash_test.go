@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,8 +32,34 @@ func TestPeerCrashHelper(t *testing.T) {
 	}
 	pause := func() error { fmt.Println("peer-published"); time.Sleep(time.Minute); return nil }
 	switch operation := os.Getenv("FULLA_PEER_CRASH_OPERATION"); operation {
-	case "enroll", "rotate":
-		err = s.savePeer(p, operation == "rotate", os.Getenv("FULLA_PEER_CRASH_OLD_PIN"), pause)
+	case "recover":
+		_, err = s.Recover(os.Getenv("FULLA_PEER_CRASH_OLD_PIN"))
+		if err == nil {
+			t.Fatal("fixture expected recovery refusal")
+		}
+		_ = pause()
+		return
+	case "enroll", "rotate", "legacy-rotate":
+		hook := pause
+		if operation == "legacy-rotate" {
+			hook = func() error {
+				info, err := securefs.Read(s.Root, "lock/info", 4096)
+				if err != nil {
+					return err
+				}
+				fields := []string{}
+				for _, field := range strings.Fields(string(info)) {
+					if !strings.HasPrefix(field, "peer_receipt=") {
+						fields = append(fields, field)
+					}
+				}
+				if err := securefs.Replace(s.Root, "lock/info", []byte(strings.Join(fields, " ")+"\n")); err != nil {
+					return err
+				}
+				return pause()
+			}
+		}
+		err = s.savePeer(p, operation != "enroll", os.Getenv("FULLA_PEER_CRASH_OLD_PIN"), hook)
 	case "dry-run", "activate":
 		identity, e := s.IdentityShow()
 		if e != nil {
@@ -49,7 +76,7 @@ func TestPeerCrashHelper(t *testing.T) {
 
 func TestPeerPublicationKilledOwner(t *testing.T) {
 	for _, git := range []bool{false, true} {
-		for _, operation := range []string{"enroll", "rotate", "dry-run", "activate"} {
+		for _, operation := range []string{"enroll", "rotate", "legacy-rotate", "dry-run", "activate"} {
 			t.Run(fmt.Sprintf("git=%t/%s", git, operation), func(t *testing.T) {
 				s := fixture(t, git)
 				value := []byte{0, 255, 10, 65}
@@ -75,7 +102,7 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 					}
 				}
 				next := original
-				if operation == "rotate" {
+				if operation == "rotate" || operation == "legacy-rotate" {
 					_, recipient, err := crypt.Generate()
 					if err != nil {
 						t.Fatal(err)
@@ -129,7 +156,7 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 					t.Fatal("accepted wrong owner")
 				}
 				result, err := s.Recover(lock.Token)
-				if err != nil || result["lock_released"] != true || result["recovered"] != false {
+				if err != nil || result["lock_released"] != true || result["recovered"] != (operation == "rotate") {
 					t.Fatal("unexpected no-journal lock recovery", result, err)
 				}
 				current, err := s.Peer(next.Name)
@@ -156,7 +183,7 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 				if err != nil || !bytes.Equal(keys, afterKeys) {
 					t.Fatal("changed identity", err)
 				}
-				if operation == "rotate" {
+				if operation == "rotate" || operation == "legacy-rotate" {
 					entries, err := os.ReadDir(filepath.Join(s.Dir, metadata, "receipts"))
 					if err != nil {
 						t.Fatal(err)
@@ -180,8 +207,12 @@ func TestPeerPublicationKilledOwner(t *testing.T) {
 							continue
 						}
 						found = true
-						if receipt.Phase != "prepared" || receipt.Previous.Host != original.Host || receipt.Replacement.Host != next.Host || receipt.Previous.Fingerprint != original.Fingerprint || receipt.Replacement.Fingerprint != next.Fingerprint {
-							t.Fatal("lost unresolved rotation evidence")
+						expectedPhase := "applied"
+						if operation == "legacy-rotate" {
+							expectedPhase = "prepared"
+						}
+						if receipt.Phase != expectedPhase || receipt.Previous.Host != original.Host || receipt.Replacement.Host != next.Host || receipt.Previous.Fingerprint != original.Fingerprint || receipt.Replacement.Fingerprint != next.Fingerprint {
+							t.Fatal("lost reconciled rotation evidence")
 						}
 					}
 					if !found {

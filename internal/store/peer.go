@@ -196,9 +196,18 @@ func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish fun
 	// Persist old public trust evidence before changing the live pin.
 	receiptPath := ""
 	if replace {
-		receiptPath = metadata + "/receipts/" + securefs.ID() + ".json"
+		receiptID := securefs.ID()
+		receiptPath = metadata + "/receipts/" + receiptID + ".json"
 		receipt, _ := json.Marshal(map[string]any{"version": 1, "command": "peer rotate", "previous": previous, "replacement": p, "phase": "prepared"})
 		if err := securefs.PublishNew(s.Root, receiptPath, receipt); err != nil {
+			return err
+		}
+		info, readErr := securefs.Read(s.Root, "lock/info", 4096)
+		if readErr != nil {
+			return readErr
+		}
+		binding := strings.TrimSpace(string(info)) + " peer_receipt=" + receiptID + "\n"
+		if err := securefs.Replace(s.Root, "lock/info", []byte(binding)); err != nil {
 			return err
 		}
 		applied, err = securefs.ReplacePublished(s.Root, file, data)

@@ -17,12 +17,13 @@ import (
 )
 
 type LockInfo struct {
-	Token     string `json:"token"`
-	Operation string `json:"operation"`
-	PID       int    `json:"pid"`
-	Host      string `json:"host"`
-	Alive     bool   `json:"alive"`
-	Local     bool   `json:"local"`
+	Token       string `json:"token"`
+	Operation   string `json:"operation"`
+	PeerReceipt string `json:"peer_receipt,omitempty"`
+	PID         int    `json:"pid"`
+	Host        string `json:"host"`
+	Alive       bool   `json:"alive"`
+	Local       bool   `json:"local"`
 }
 
 func (s *Store) InspectLock() (*LockInfo, error) {
@@ -53,6 +54,11 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 			info.Host = value
 		case "operation":
 			info.Operation = value
+		case "peer_receipt":
+			if info.PeerReceipt != "" || !validID(value) {
+				return nil, fault.New("store.lock_unknown", "invalid peer receipt binding")
+			}
+			info.PeerReceipt = value
 		}
 	}
 	if info.PID <= 0 || info.Token == "" || info.Host == "" {
@@ -110,6 +116,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	count := 0
+	if info.PeerReceipt != "" {
+		count++
+	}
 	for _, name := range []string{"pending.json", "rotation.json", "prune.json"} {
 		if _, err := s.Root.Lstat(metadata + "/" + name); err == nil {
 			count++
@@ -127,6 +136,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		operation = info.Operation
 	}
 	newInfo := fmt.Sprintf("pid=%d host=%s operation=%s started=%s\n", os.Getpid(), info.Host, operation, time.Now().UTC().Format(time.RFC3339))
+	if info.PeerReceipt != "" {
+		newInfo = strings.TrimSpace(newInfo) + " peer_receipt=" + info.PeerReceipt + "\n"
+	}
 	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
 		return nil, err
 	}
@@ -182,14 +194,22 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		if !errors.Is(rotationErr, fs.ErrNotExist) {
 			return nil, rotationErr
 		}
+		if info.PeerReceipt != "" {
+			if err := s.reconcilePeerReceipt(info.PeerReceipt); err != nil {
+				return nil, err
+			}
+		}
 		if err := s.Root.Remove("lock/recovery"); err != nil {
 			return nil, err
 		}
 		l := &Lock{store: s, Token: expected, held: true}
 		if err := l.Release(); err != nil {
+			if info.PeerReceipt != "" {
+				return nil, fault.Applied("peer receipt reconciled but lock release failed", info.PeerReceipt)
+			}
 			return nil, err
 		}
-		return map[string]any{"recovered": false, "lock_released": true}, nil
+		return map[string]any{"recovered": info.PeerReceipt != "", "lock_released": true, "peer_receipt": info.PeerReceipt}, nil
 	}
 	if err != nil {
 		return nil, err
