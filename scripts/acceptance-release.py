@@ -33,6 +33,12 @@ native_os = {"Darwin": "darwin", "Linux": "linux"}[platform.system()]
 native_arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "amd64"}[
     platform.machine()
 ]
+source_documents: dict[str, bytes] = {}
+with tarfile.open(root / f"fulla_{version}_source.tar.gz", "r:gz") as source:
+    for document in ("LICENSE", "README.md"):
+        member = source.extractfile(f"fulla-{version}/{document}")
+        assert member is not None
+        source_documents[document] = member.read()
 with tempfile.TemporaryDirectory(prefix="fulla-release-smoke-") as temporary:
     for target_os in ("darwin", "linux"):
         for arch in ("amd64", "arm64"):
@@ -49,6 +55,9 @@ with tempfile.TemporaryDirectory(prefix="fulla-release-smoke-") as temporary:
                 for m in members:
                     assert m.uid == 0 and m.gid == 0 and m.mtime == 0
                     assert m.mode == (0o755 if m.name == "fulla" else 0o644)
+                for document, expected_bytes in source_documents.items():
+                    member = archive.extractfile(document)
+                    assert member is not None and member.read() == expected_bytes
                 source_file = archive.extractfile("SOURCE.json")
                 assert source_file is not None
                 provenance = cast(dict[str, str], json.loads(source_file.read()))

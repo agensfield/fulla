@@ -95,14 +95,6 @@ func run(version, output string) error {
 	if err != nil {
 		return err
 	}
-	license, err := os.ReadFile("LICENSE")
-	if err != nil {
-		return err
-	}
-	readme, err := os.ReadFile("README.md")
-	if err != nil {
-		return err
-	}
 	provenance, err := json.MarshalIndent(map[string]string{"version": version, "commit": sha, "module": "github.com/agensfield/fulla", "go": runtime.Version(), "source": "https://github.com/agensfield/fulla/tree/" + sha}, "", "  ")
 	if err != nil {
 		return err
@@ -125,6 +117,14 @@ func run(version, output string) error {
 		return err
 	}
 	snapshot := filepath.Join(temp, "fulla-"+version)
+	license, err := os.ReadFile(filepath.Join(snapshot, "LICENSE"))
+	if err != nil {
+		return err
+	}
+	readme, err := os.ReadFile(filepath.Join(snapshot, "README.md"))
+	if err != nil {
+		return err
+	}
 	checksums := map[string]string{}
 	for _, target := range [][2]string{{"darwin", "amd64"}, {"darwin", "arm64"}, {"linux", "amd64"}, {"linux", "arm64"}} {
 		executable := filepath.Join(temp, "fulla-"+target[0]+"-"+target[1])
