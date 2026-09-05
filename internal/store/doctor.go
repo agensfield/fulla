@@ -6,10 +6,18 @@ import (
 
 	"filippo.io/age"
 	"github.com/agensfield/fulla/internal/crypt"
+	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
 )
 
+type EntryVerification struct {
+	Name  string `json:"name"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
 type DoctorResult struct {
+	Verification    []EntryVerification  `json:"verification,omitempty"`
 	IdentityValid   bool                 `json:"identity_valid"`
 	RecipientsValid bool                 `json:"recipients_valid"`
 	Plugins         []crypt.PluginStatus `json:"plugins"`
@@ -122,8 +130,33 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 		if err := s.Unlocked(); err != nil {
 			return r, err
 		}
-		if err := s.DeepVerify(); err != nil {
+		ids, recipients, err := s.Keys()
+		if err != nil {
 			return r, err
+		}
+		if err := crypt.VerifyRecipient(recipients, ids); err != nil {
+			return r, err
+		}
+		r.Verification = []EntryVerification{}
+		for _, name := range names {
+			check := EntryVerification{Name: name}
+			ciphertext, err := s.Ciphertext(name)
+			if err == nil {
+				var plaintext []byte
+				plaintext, err = crypt.Decrypt(ciphertext, ids)
+				clear(plaintext)
+			}
+			check.OK = err == nil
+			if err != nil {
+				check.Error = "entry.verification_failed"
+				var problem *fault.Error
+				if errors.As(err, &problem) {
+					check.Error = problem.Code
+				}
+				r.Healthy = false
+				r.Issues = append(r.Issues, "entry.verification_failed:"+name)
+			}
+			r.Verification = append(r.Verification, check)
 		}
 	}
 	return r, nil

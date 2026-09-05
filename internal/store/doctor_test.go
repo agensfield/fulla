@@ -48,3 +48,52 @@ func TestDoctorInspectsPluginWithoutDecryptingOrExecuting(t *testing.T) {
 		t.Fatal("diagnostics exposed private material", err)
 	}
 }
+
+func TestDeepDoctorReportsEveryEntryWithoutValues(t *testing.T) {
+	s := fixture(t, false)
+	secret := []byte("deep-doctor-value-must-not-appear")
+	for _, name := range []string{"a-broken", "b-valid", "c-broken"} {
+		if _, err := s.Write(name, secret, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Preserve valid age headers while corrupting payload authentication, so
+	// structural inspection alone cannot discover these failures.
+	for _, name := range []string{"a-broken", "c-broken"} {
+		data, err := s.Ciphertext(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data[len(data)-1] ^= 1
+		if err := securefs.Replace(s.Root, "passwords/"+name+".age", data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ordinary, err := s.Doctor(false)
+	if err != nil || !ordinary.Healthy || len(ordinary.Verification) != 0 {
+		t.Fatalf("structural inspection decrypted content: %+v %v", ordinary, err)
+	}
+	deep, err := s.Doctor(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deep.Healthy || len(deep.Verification) != 3 {
+		t.Fatalf("incomplete verification: %+v", deep)
+	}
+	for i, result := range deep.Verification {
+		if result.OK != (i == 1) || (i != 1 && result.Error == "") {
+			t.Fatalf("wrong result %+v", result)
+		}
+	}
+	encoded, err := json.Marshal(deep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := s.Root.ReadFile("identities")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, secret) || bytes.Contains(encoded, private) {
+		t.Fatal("verification leaked private material")
+	}
+}

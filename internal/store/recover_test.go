@@ -63,7 +63,8 @@ func TestStructuralDoctorDoesNotDecrypt(t *testing.T) {
 	if err != nil || !r.Healthy {
 		t.Fatal("structural check decrypted payload", r, err)
 	}
-	if _, err := s.Doctor(true); err == nil {
-		t.Fatal("deep verification missed corruption")
+	deep, err := s.Doctor(true)
+	if err != nil || deep.Healthy || len(deep.Verification) != 1 || deep.Verification[0].OK {
+		t.Fatal("deep verification missed corruption", deep, err)
 	}
 }

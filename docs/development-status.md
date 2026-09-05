@@ -282,7 +282,8 @@ and real SIGKILL recovery after a partial mode-repair sequence. The killed fixtu
 uses the production lock and mode-application primitives; it does not yet cover
 every kill boundary in the complete public command.
 
-The earlier macOS initialization failure at `d2f5752` remains unexplained.
+The earlier status-only initialization failure at `d2f5752` was initially
+unexplained; see the later Git maintenance race investigation below.
 `eb60c09` improved failure diagnostics and added 20 repeated CI journeys per OS;
 both hosted jobs passed (run 33983151661). Local runs of 20 repetitions with
 Go 1.26.0 and 100 with Go 1.27.1 also passed. This is reproduction evidence,
@@ -302,3 +303,41 @@ Hosted permission-repair acceptance at `895f0e9` passed on Linux and macOS:
 https://github.com/agensfield/fulla/actions/runs/33983935870. This includes native
 ACL fixtures, killed-owner recovery, full race/static gates, terminal and real
 clipboard acceptance, repeated initialization journeys, and cross-builds.
+
+
+## Deep diagnostic outcomes
+
+After identity/recipient preflight, `doctor --deep` now attempts every inventoried
+entry and reports each name, success, and a typed error code. An entry failure
+does not hide later outcomes. The report is unhealthy and the CLI returns status
+1 when any entry fails; private diagnostic artifacts retain aggregate issue
+codes rather than entry names. Successful plaintext buffers are cleared after
+verification. Structural doctor remains non-decrypting, and mutation preflight
+continues to use the existing fail-fast verifier.
+
+A fixture with valid age headers but corrupted first/last payloads proves that
+structural inspection does not decrypt, while deep inspection reports both
+failures and the valid middle entry without exposing values/private identities.
+Identity/configuration preflight failures still stop the entry pass explicitly.
+
+
+## Git maintenance race: reproduced and fixed
+
+macOS CI run 33984127042 failed during initialization with
+`chmodat passwords/.git/objects/maintenance.lock: no such file or directory`.
+Git's detached automatic maintenance was changing the object directory while
+Fulla normalized the newly created repository's modes. This is a concrete
+product concurrency bug, not a proved runner fault. It plausibly explains the
+earlier status-only initialization failure, whose missing details prevent exact
+retrospective attribution.
+
+Commit `6187bf4` disables `maintenance.auto` and `gc.auto` for internal Git
+commands so maintenance cannot outlive their lock/staging scope. It does not
+change persistent user Git configuration or the explicit expert passthrough.
+A real Git trace2 regression includes a positive control, fails on the old
+implementation, and passes with the fix: Fulla initialization and writes no
+longer spawn automatic maintenance children. Externally scheduled maintenance
+or an unrelated process ignoring the store lock remains outside this control.
+
+References: [observed CI failure](https://github.com/agensfield/fulla/actions/runs/33984127042),
+[Git maintenance settings](https://git-scm.com/docs/git-config#Documentation/git-config.txt-maintenanceauto).
