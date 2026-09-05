@@ -611,3 +611,33 @@ The full Go 1.26.0 race suite and vet passed. After refining informational-messa
 handling, CLI/crypto race tests, vet, Ruff/basedpyright, and the full PTY harness
 passed again. The mock emits an ANSI control sequence to verify quoted rendering;
 nonterminal commands continue when only an informational message is requested.
+
+
+## Recovery streams now share plugin policy
+
+Source review while tracing full-restore UI found five direct age calls in full
+archives and logical transfers. Those paths bypassed the entry crypto boundary's
+AGEDEBUG plugin guard and replaced actionable plugin errors with generic recovery
+errors. They now use shared `crypt.EncryptStream` / `crypt.DecryptStream` helpers;
+entry encryption/decryption uses those helpers too.
+
+Plugin policy runs before header wrapping/unwrapping. Callers retain their existing
+payload limits, authenticated-EOF requirements, and publication sequencing.
+Archive/bundle-specific ordinary error codes are preserved, while plugin and
+interaction errors (including cancellation) remain actionable and redacted.
+The only remaining direct production age decryption outside this boundary is
+structural doctor with an inert identity that cannot invoke plugins or decrypt.
+
+Fixtures cover logical export/verify/import and full export/restore with a
+marker-writing mock executable. All five refuse AGEDEBUG=plugin before execution
+or artifact/target publication and release acquired locks. Valid age ciphertext
+is supplied to the read paths so the test does not rely on malformed-header
+rejection. Crypto fixtures continue exercising the working real plugin protocol.
+
+This fixes the shared streaming policy gap. Passing a human UI into validation
+of a restored plugin-backed store, guided full-restore confirmation, and hardware
+touch/timeouts remain open. Terminal checkpoint `97ad593` passed hosted CI:
+https://github.com/agensfield/fulla/actions/runs/33987854529.
+
+The full local Go 1.26.0 race suite and vet passed, including recovery streams,
+working plugin fixtures, and native archive/bundle authentication tests.

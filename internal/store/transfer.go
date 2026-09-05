@@ -79,9 +79,9 @@ func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output
 	}
 	var encoded bytes.Buffer
 	bounded := &boundedWriter{writer: &encoded, remaining: MaxBundleBytes}
-	w, err := age.Encrypt(bounded, recipients...)
+	w, err := crypt.EncryptStream(bounded, recipients)
 	if err != nil {
-		return result, fault.New("crypto.encrypt_failed", "could not protect recovery bundle")
+		return result, streamFailure(err, "crypto.encrypt_failed", "could not protect recovery bundle")
 	}
 	e, err := protocol.NewEncoder(w)
 	if err != nil {
@@ -253,9 +253,9 @@ func (c *bundleConsumer) EndEntry(name string, size uint64, _ [sha256.Size]byte)
 
 func VerifyLogical(ciphertext []byte, identities []age.Identity) (TransferResult, error) {
 	result := TransferResult{Names: []string{}, Skipped: []string{}}
-	r, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
+	r, err := crypt.DecryptStream(bytes.NewReader(ciphertext), identities)
 	if err != nil {
-		return result, fault.New("transfer.decrypt_failed", "could not decrypt recovery bundle")
+		return result, streamFailure(err, "transfer.decrypt_failed", "could not decrypt recovery bundle")
 	}
 	c := &bundleConsumer{verify: true, names: []string{}}
 	stats, err := protocol.Decode(r, c)
@@ -291,9 +291,9 @@ func (s *Store) ImportLogical(ciphertext []byte, identities []age.Identity) (res
 	if identities == nil {
 		identities = ids
 	}
-	r, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
+	r, err := crypt.DecryptStream(bytes.NewReader(ciphertext), identities)
 	if err != nil {
-		return result, fault.New("transfer.decrypt_failed", "could not decrypt transfer bundle")
+		return result, streamFailure(err, "transfer.decrypt_failed", "could not decrypt transfer bundle")
 	}
 	c := &bundleConsumer{values: map[string][]byte{}, names: []string{}, recipients: rs}
 	stats, err := protocol.Decode(r, c)

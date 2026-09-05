@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
 )
@@ -78,9 +79,9 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 		return result, fault.New("recovery.circular_protection", "full archive cannot be protected solely by its contained active identity")
 	}
 	var encrypted bytes.Buffer
-	ageWriter, err := age.Encrypt(&boundedWriter{writer: &encrypted, remaining: MaxBundleBytes}, recipients...)
+	ageWriter, err := crypt.EncryptStream(&boundedWriter{writer: &encrypted, remaining: MaxBundleBytes}, recipients)
 	if err != nil {
-		return result, fault.New("crypto.encrypt_failed", "could not protect disaster archive")
+		return result, streamFailure(err, "crypto.encrypt_failed", "could not protect disaster archive")
 	}
 	if _, err := io.WriteString(ageWriter, fullArchiveMagic); err != nil {
 		return result, err
@@ -176,9 +177,9 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (r
 	if err != nil {
 		return result, fault.New("recovery.invalid_target", "restore parent must already exist")
 	}
-	r, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
+	r, err := crypt.DecryptStream(bytes.NewReader(ciphertext), identities)
 	if err != nil {
-		return result, fault.New("recovery.decrypt_failed", "could not decrypt full archive")
+		return result, streamFailure(err, "recovery.decrypt_failed", "could not decrypt full archive")
 	}
 	magic := make([]byte, len(fullArchiveMagic))
 	if _, err := io.ReadFull(r, magic); err != nil || string(magic) != fullArchiveMagic {

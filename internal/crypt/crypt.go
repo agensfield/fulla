@@ -108,16 +108,10 @@ func Identities(data []byte, ui *plugin.ClientUI) ([]age.Identity, error) {
 }
 
 func Encrypt(value []byte, recipients []age.Recipient) ([]byte, error) {
-	if err := rejectPluginDebug(nil, recipients); err != nil {
-		return nil, err
-	}
 	var output bytes.Buffer
-	w, err := age.Encrypt(&output, recipients...)
+	w, err := EncryptStream(&output, recipients)
 	if err != nil {
-		if failure := pluginFailure(err); failure != nil {
-			return nil, failure
-		}
-		return nil, fault.New("crypto.encrypt_failed", "could not wrap encrypted file key")
+		return nil, err
 	}
 	if _, err = w.Write(value); err != nil {
 		return nil, fault.New("crypto.encrypt_failed", "could not encrypt value")
@@ -129,15 +123,9 @@ func Encrypt(value []byte, recipients []age.Recipient) ([]byte, error) {
 }
 
 func Decrypt(ciphertext []byte, identities []age.Identity) ([]byte, error) {
-	if err := rejectPluginDebug(identities, nil); err != nil {
-		return nil, err
-	}
-	r, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
+	r, err := DecryptStream(bytes.NewReader(ciphertext), identities)
 	if err != nil {
-		if failure := pluginFailure(err); failure != nil {
-			return nil, failure
-		}
-		return nil, fault.New("crypto.decrypt_failed", "could not decrypt with the selected identity")
+		return nil, err
 	}
 	value, err := io.ReadAll(io.LimitReader(r, MaxEntryBytes+1))
 	if err != nil {
