@@ -21,13 +21,14 @@ type Change struct {
 }
 
 type Journal struct {
-	Version   int      `json:"version"`
-	ID        string   `json:"id"`
-	Command   string   `json:"command"`
-	Started   string   `json:"started"`
-	Phase     string   `json:"phase"`
-	GitBefore string   `json:"git_before,omitempty"`
-	Changes   []Change `json:"changes"`
+	SnapshotDomain string   `json:"snapshot_domain,omitempty"`
+	Version        int      `json:"version"`
+	ID             string   `json:"id"`
+	Command        string   `json:"command"`
+	Started        string   `json:"started"`
+	Phase          string   `json:"phase"`
+	GitBefore      string   `json:"git_before,omitempty"`
+	Changes        []Change `json:"changes"`
 }
 
 type MutationResult struct {
@@ -48,9 +49,8 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		_ = lock.Release()
 		return result, err
 	}
-	// Every mutation publishes a backup, even a plain pa-v1 CRUD operation.
-	// Do not write the current snapshot schema into a newer backup domain.
-	if err := s.RequireDomain("backup"); err != nil {
+	snapshotDomain, err := s.transactionSnapshotDomain()
+	if err != nil {
 		_ = lock.Release()
 		return result, err
 	}
@@ -91,7 +91,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 			return result, err
 		}
 	}
-	j := Journal{Version: 1, ID: id, Command: command, Started: time.Now().UTC().Format(time.RFC3339Nano), Phase: "prepared", Changes: []Change{}}
+	j := Journal{SnapshotDomain: snapshotDomain, Version: 1, ID: id, Command: command, Started: time.Now().UTC().Format(time.RFC3339Nano), Phase: "prepared", Changes: []Change{}}
 	if enabled, _ := s.GitEnabled(); enabled {
 		j.GitBefore, err = s.Head()
 		if err != nil {
@@ -151,7 +151,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		return result, err
 	}
 	pending = true
-	result = MutationResult{Transaction: id, Names: names, Receipt: metadata + "/receipts/" + id + ".json", Backup: metadata + "/backups/" + id}
+	result = MutationResult{Transaction: id, Names: names, Receipt: metadata + "/receipts/" + id + ".json", Backup: snapshotBase(snapshotDomain) + "/" + id}
 	if err := s.finishJournal(&j, hook); err != nil {
 		return result, fault.Applied("transaction requires explicit recovery; shared lock retained", id)
 	}
@@ -171,9 +171,7 @@ func (s *Store) journalWrite(j *Journal) error {
 }
 
 func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
-	// Recovery can run in a newly opened binary after the manifest changed.
-	// Check before publishing entries, Git commits, snapshots, or receipts.
-	if err := s.RequireDomain("backup"); err != nil {
+	if err := s.requireSnapshotDomain(j.SnapshotDomain); err != nil {
 		return err
 	}
 	if j.Version != 1 || !validID(j.ID) {
@@ -304,9 +302,18 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 	}
 	// Backups retain encrypted old/new material and a complete journal. Copying
 	// preserves staged evidence if final receipt creation is interrupted.
-	backup := metadata + "/backups/" + j.ID
+	base := snapshotBase(j.SnapshotDomain)
+	if j.SnapshotDomain == "transactions" {
+		if err := s.Root.MkdirAll(base, 0o700); err != nil {
+			return err
+		}
+		if err := securefs.SyncDir(s.Root, metadata); err != nil {
+			return err
+		}
+	}
+	backup := base + "/" + j.ID
 	if _, err := s.Root.Lstat(backup); errors.Is(err, fs.ErrNotExist) {
-		stage := metadata + "/backups/.fulla-stage-" + j.ID
+		stage := base + "/.fulla-stage-" + j.ID
 		if err := s.Root.RemoveAll(stage); err != nil {
 			return err
 		}
@@ -329,7 +336,7 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 		if err := securefs.Replace(s.Root, stage+"/journal.json", finalJournal); err != nil {
 			return err
 		}
-		parent, err := s.Root.OpenRoot(metadata + "/backups")
+		parent, err := s.Root.OpenRoot(base)
 		if err != nil {
 			return err
 		}
@@ -338,7 +345,7 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 		if err != nil {
 			return err
 		}
-		if err := securefs.SyncDir(s.Root, metadata+"/backups"); err != nil {
+		if err := securefs.SyncDir(s.Root, base); err != nil {
 			return err
 		}
 	} else if err != nil {

@@ -34,7 +34,7 @@ func transactionFiles(t *testing.T, s *Store) map[string]string {
 	return files
 }
 
-func TestTransactionRejectsFutureBackupDomain(t *testing.T) {
+func TestTransactionRejectsUnsupportedSnapshotPublication(t *testing.T) {
 	for _, git := range []bool{false, true} {
 		for _, recovery := range []bool{false, true} {
 			t.Run(fmt.Sprintf("git=%v/recovery=%v", git, recovery), func(t *testing.T) {
@@ -79,6 +79,9 @@ func TestTransactionRejectsFutureBackupDomain(t *testing.T) {
 					next.Domains[domain] = version
 				}
 				next.Domains["backup"] = 2
+				if !recovery {
+					delete(next.Domains, "backup")
+				}
 				data, err := json.Marshal(next)
 				if err != nil {
 					t.Fatal(err)

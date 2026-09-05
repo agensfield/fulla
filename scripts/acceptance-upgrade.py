@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import select
 import subprocess
 import sys
 import tempfile
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import cast
 
 PREDECESSOR = "831caf68655b41b4ca5b064b7693af35df68a6e6"
-old, current = [str(Path(arg).resolve()) for arg in sys.argv[1:3]]
+old, current, fixture = [str(Path(arg).resolve()) for arg in sys.argv[1:4]]
 _ = os.umask(0o077)
 
 
@@ -144,6 +145,68 @@ def acceptance(no_git: bool) -> None:
         _ = run(old, "backup", "restore", backup, "--phase", "after", "--yes")
         exact(current, "nested/value", changed)
         _ = run(current, "doctor", "--deep")
+        # New transaction snapshot metadata must make an actual old recovery
+        # binary refuse, preserving the journal for a supporting binary.
+        _ = run(current, "add", "a", "--stdin", data=b"original")
+        manifest_path = store / ".fulla/store.json"
+        saved_manifest = manifest_path.read_bytes()
+        future = obj(saved_manifest)
+        domains = cast(dict[str, object], future["domains"])
+        domains["backup"] = 2
+        _ = manifest_path.write_text(json.dumps(future))
+        child: subprocess.Popen[bytes] = subprocess.Popen(
+            [fixture, "-test.run=^TestTransactionCrashHelper$"],
+            env={
+                **env,
+                "FULLA_TRANSACTION_FIXTURE": str(store),
+                "FULLA_TRANSACTION_PHASE": "published:a",
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            assert child.stdout is not None
+            ready, _, _ = select.select([child.stdout], [], [], 20)
+            assert ready
+            line = cast(bytes, child.stdout.readline())
+            assert line.strip() == b"transaction-ready"
+            child.kill()
+            _ = child.wait(timeout=10)
+        finally:
+            if child.poll() is None:
+                child.kill()
+                _ = child.wait(timeout=10)
+            if child.stdout is not None:
+                child.stdout.close()
+            if child.stderr is not None:
+                child.stderr.close()
+        before_old = {
+            k: v for k, v in files(store).items() if not k.startswith("lock/")
+        }
+        owner = (store / "lock/owner").read_text().strip()
+        refused = subprocess.run(
+            [old, "--store", str(store), "--json", "doctor", "--recover-lock", owner],
+            input=b"",
+            env=env,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        assert refused.returncode == 1
+        failure = obj(refused.stdout)
+        assert cast(dict[str, object], failure["error"])["code"] == "metadata.invalid"
+        assert before_old == {
+            k: v for k, v in files(store).items() if not k.startswith("lock/")
+        }
+        # The historical recovery claims a new owner before parsing the journal.
+        # Read that new token; never retry with stale authority.
+        owner = (store / "lock/owner").read_text().strip()
+        recovered = run(current, "doctor", "--recover-lock", owner)
+        assert recovered["recovered"] is True and recovered["lock_released"] is True
+        exact(current, "b", b"\x00\xff\n")
+        _ = manifest_path.write_bytes(saved_manifest)  # Undo the fixture version only.
+        snapshot = run(current, "backup", "show", str(recovered["transaction"]))
+        assert snapshot["snapshot_domain"] == "transactions"
         print(
             json.dumps({"predecessor": PREDECESSOR, "no_git": no_git, "accepted": True})
         )

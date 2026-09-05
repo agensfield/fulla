@@ -1199,3 +1199,39 @@ This journey proves specific real prior/current state interoperability without
 a format transformation. It does not invent a version-0 migration or satisfy
 interrupted domain-upgrade, future-domain CRUD, or released-binary cross-host
 acceptance by implication. Those remain open in the full-contract matrix.
+
+
+## CRUD with a newer backup domain
+
+The initial `d51bf81` guard prevented corruption but also refused ordinary writes.
+The implementation now preserves supported transaction snapshots independently
+of the newer backup feature: journals bind `snapshot_domain: "transactions"`,
+and full encrypted before/after snapshots publish under
+`.fulla/transaction-backups/ID`. Newer `.fulla/backups` files and the manifest
+remain untouched. Missing or malformed backup versions still refuse; this is
+not a fallback for corrupted metadata. Existing ordinary journals keep their
+serialized shape and cannot switch destination during recovery.
+
+Compatible backup readers discover both locations and reject duplicate IDs or
+mismatched journal domains. Restore uses the selected snapshot location, and
+prune journals preserve it across interrupted deletion. Backup operations still
+refuse unsupported backup metadata, while ordinary CRUD can proceed using the
+understood transaction domain. See [the compatibility policy](metadata-compatibility.md)
+for the explicit historical-binary boundary and remaining future-transaction
+limitation. This completes a concrete part of the earlier open safe-write policy
+without claiming all metadata migration requirements are fulfilled.
+
+The complete local Go 1.26.0 race suite and vet passed. Targeted race tests cover
+Git/no-Git CRUD with exact before/after snapshots, six killed-process boundaries,
+recovery after a fixture version change without destination retargeting, mixed
+snapshot restoration/pruning, interrupted transaction-snapshot pruning,
+unknown-location and duplicate-ID refusal, and exact full-archive preservation
+followed by restoration from the recovered snapshot.
+
+The actual historical CLI `831caf6` was also given a killed transaction containing
+the new field. It returned `metadata.invalid`, changing only recovery-lock
+ownership while preserving all other files and pending evidence. Current Fulla
+then recovered successfully with the newly claimed owner token, on Git and
+no-Git stores. CI now builds the current store-test fixture for this drill.
+Ruff, basedpyright, actionlint, and diff checks passed. Prior `cbe2510` completed
+hosted CI: https://github.com/agensfield/fulla/actions/runs/33994967310.

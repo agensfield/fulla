@@ -133,9 +133,12 @@ func (s *Store) finishPrune(j *pruneJournal, hook func(string) error) error {
 		if !validID(backup.ID) || seen[backup.ID] || backup.Bytes < 0 {
 			return fault.New("backup.invalid", "invalid prune selection")
 		}
+		if err := s.requireSnapshotDomain(backup.SnapshotDomain); err != nil {
+			return err
+		}
 		seen[backup.ID] = true
 		if index < j.Done {
-			if _, err := s.Root.Lstat(metadata + "/backups/" + backup.ID); err == nil {
+			if _, err := s.Root.Lstat(snapshotBase(backup.SnapshotDomain) + "/" + backup.ID); err == nil {
 				return fault.New("backup.conflict", "completed prune selection reappeared")
 			} else if !errors.Is(err, fs.ErrNotExist) {
 				return err
@@ -146,10 +149,10 @@ func (s *Store) finishPrune(j *pruneJournal, hook func(string) error) error {
 		backup := j.Selected[j.Done]
 		// RemoveAll is intentionally idempotent: a process can die after any file
 		// unlink, including removal of the snapshot's own journal.
-		if err := s.Root.RemoveAll(metadata + "/backups/" + backup.ID); err != nil {
+		if err := s.Root.RemoveAll(snapshotBase(backup.SnapshotDomain) + "/" + backup.ID); err != nil {
 			return err
 		}
-		if err := securefs.SyncDir(s.Root, metadata+"/backups"); err != nil {
+		if err := securefs.SyncDir(s.Root, snapshotBase(backup.SnapshotDomain)); err != nil {
 			return err
 		}
 		if hook != nil {

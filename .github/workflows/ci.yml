@@ -63,7 +63,9 @@ jobs:
           GOWORK: "off"
         run: go build -o ../fulla-predecessor-bin .
       - name: Historical Fulla upgrade and basic rollback
-        run: python3 scripts/acceptance-upgrade.py dist/fulla-predecessor-bin dist/fulla
+        run: |
+          go test -c -o dist/fulla-store-fixture ./internal/store
+          python3 scripts/acceptance-upgrade.py dist/fulla-predecessor-bin dist/fulla dist/fulla-store-fixture
       - name: Isolated X11 clipboard dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth

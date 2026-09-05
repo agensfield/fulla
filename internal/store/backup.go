@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"io/fs"
 	"path"
 	"sort"
@@ -13,21 +14,49 @@ import (
 )
 
 type Backup struct {
-	ID      string `json:"id"`
-	Started string `json:"started"`
-	Command string `json:"command"`
-	Bytes   int64  `json:"bytes"`
+	SnapshotDomain string `json:"snapshot_domain,omitempty"`
+	ID             string `json:"id"`
+	Started        string `json:"started"`
+	Command        string `json:"command"`
+	Bytes          int64  `json:"bytes"`
 }
 
 func (s *Store) Backups() ([]Backup, error) {
 	if err := s.RequireDomain("backup"); err != nil {
 		return nil, err
 	}
-	root, err := s.Root.OpenRoot(metadata + "/backups")
+	backups := []Backup{}
+	for _, domain := range []string{"", "transactions"} {
+		items, err := s.snapshotBackups(domain)
+		if err != nil {
+			return nil, err
+		}
+		backups = append(backups, items...)
+	}
+	sort.Slice(backups, func(i, j int) bool {
+		a, _ := time.Parse(time.RFC3339Nano, backups[i].Started)
+		b, _ := time.Parse(time.RFC3339Nano, backups[j].Started)
+		if a.Equal(b) {
+			return backups[i].ID > backups[j].ID
+		}
+		return a.After(b)
+	})
+	return backups, nil
+}
+
+func (s *Store) snapshotBackups(domain string) ([]Backup, error) {
+	base := snapshotBase(domain)
+	root, err := s.Root.OpenRoot(base)
+	if errors.Is(err, fs.ErrNotExist) && domain == "transactions" {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer root.Close()
+	if err := s.requireSnapshotDomain(domain); err != nil {
+		return nil, err
+	}
 	entries, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return nil, err
@@ -47,7 +76,7 @@ func (s *Store) Backups() ([]Backup, error) {
 		if _, err := time.Parse(time.RFC3339Nano, j.Started); err != nil {
 			return nil, fault.New("backup.invalid", "backup timestamp is invalid")
 		}
-		b := Backup{ID: j.ID, Started: j.Started, Command: j.Command}
+		b := Backup{SnapshotDomain: domain, ID: j.ID, Started: j.Started, Command: j.Command}
 		err = fs.WalkDir(root.FS(), entry.Name(), func(name string, e fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -66,14 +95,6 @@ func (s *Store) Backups() ([]Backup, error) {
 		}
 		backups = append(backups, b)
 	}
-	sort.Slice(backups, func(i, j int) bool {
-		a, _ := time.Parse(time.RFC3339Nano, backups[i].Started)
-		b, _ := time.Parse(time.RFC3339Nano, backups[j].Started)
-		if a.Equal(b) {
-			return backups[i].ID > backups[j].ID
-		}
-		return a.After(b)
-	})
 	return backups, nil
 }
 
@@ -85,14 +106,18 @@ func (s *Store) BackupShow(id string) (Journal, error) {
 	if !validID(id) {
 		return j, fault.Usage("invalid backup identifier")
 	}
-	data, err := securefs.Read(s.Root, metadata+"/backups/"+id+"/journal.json", maxMetadata)
+	location, domain, err := s.snapshotLocation(id)
+	if err != nil {
+		return j, err
+	}
+	data, err := securefs.Read(s.Root, location+"/journal.json", maxMetadata)
 	if err != nil {
 		return j, fault.New("backup.not_found", "backup metadata is missing or unreadable")
 	}
 	if err := StrictJSON(data, &j); err != nil {
 		return j, err
 	}
-	if j.Version != 1 || j.ID != id {
+	if j.Version != 1 || j.ID != id || j.SnapshotDomain != domain {
 		return j, fault.New("backup.invalid", "backup identity/version mismatch")
 	}
 	return j, nil
@@ -146,7 +171,11 @@ func (s *Store) BackupRestoreConfirmed(id, phase string, confirm func(BackupRest
 	if err != nil {
 		return result, err
 	}
-	base := metadata + "/backups/" + id + "/" + phase + "/passwords"
+	location, _, err := s.snapshotLocation(id)
+	if err != nil {
+		return result, err
+	}
+	base := location + "/" + phase + "/passwords"
 	values := map[string][]byte{}
 	err = fs.WalkDir(s.Root.FS(), base, func(p string, e fs.DirEntry, err error) error {
 		if err != nil {
