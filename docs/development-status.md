@@ -415,3 +415,23 @@ https://github.com/agensfield/fulla/actions/runs/33985186278.
 Remaining recovery acceptance includes the complete crash matrix, full-disaster
 guided flow, and source provenance/retired-key lifecycle review. This checkpoint
 does not establish complete recovery or release acceptance.
+
+
+## Rotation staging cleanup ordering
+
+Rotation staging includes the newly generated private identity. Finalization
+previously removed the recovery journal before deleting staging, leaving a crash
+window in which an untracked key copy could survive a later destructive rotation.
+Finalization now removes staging and syncs its parent directory before removing
+the journal. The retained `retired` phase can replay without staging.
+
+The rotation failure-injection fixture now interrupts after staging cleanup,
+asserts the private staging directory is absent while the recovery journal remains,
+and completes recovery with intact live values. This is deterministic state-machine
+coverage, not a simulated power-loss or complete killed-process acceptance matrix.
+Pre-journal staging crashes and previously orphaned staging remain separate audit
+items; this change closes the identified finalization ordering window.
+
+Go 1.26.0 targeted rotation tests, the full race suite, and vet passed. Snapshot
+restore checkpoint `7dc38fe` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33985705977.

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"io/fs"
 	"testing"
 
 	"github.com/agensfield/fulla/internal/securefs"
@@ -62,7 +63,7 @@ func TestRotationContinuityAndExplicitDestruction(t *testing.T) {
 }
 
 func TestRotationPublicationRecovery(t *testing.T) {
-	for _, phase := range []string{"staged", "published:passwords/entry.age", "published:recipients", "published:identities", "committed"} {
+	for _, phase := range []string{"staged", "published:passwords/entry.age", "published:recipients", "published:identities", "committed", "cleaned"} {
 		t.Run(phase, func(t *testing.T) {
 			s := fixture(t, true)
 			if _, err := s.Write("entry", []byte("value"), false); err != nil {
@@ -93,6 +94,14 @@ func TestRotationPublicationRecovery(t *testing.T) {
 			var j Rotation
 			if err := StrictJSON(data, &j); err != nil {
 				t.Fatal(err)
+			}
+			if phase == "cleaned" {
+				if j.Phase != "retired" {
+					t.Fatal("cleanup lacks a replayable journal phase")
+				}
+				if _, err := s.Root.Lstat(metadata + "/transactions/" + j.ID); !errors.Is(err, fs.ErrNotExist) {
+					t.Fatal("private identity staging remains after cleanup", err)
+				}
 			}
 			if err := s.finishRotation(&j, nil); err != nil {
 				t.Fatal(err)

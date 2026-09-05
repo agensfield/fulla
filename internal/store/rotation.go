@@ -353,11 +353,26 @@ func (s *Store) finishRotation(j *Rotation, hook func(string) error) error {
 	} else if err != nil {
 		return err
 	}
+	// Staging contains the new private identity. Keep the recovery journal
+	// until its removal is durable, so a crash cannot orphan a key copy that
+	// survives later explicit retired-key destruction. The retired phase can
+	// finish without staging and therefore safely repeat this cleanup.
+	if err := s.Root.RemoveAll(dir); err != nil {
+		return err
+	}
+	if err := securefs.SyncDir(s.Root, metadata+"/transactions"); err != nil {
+		return err
+	}
+	if hook != nil {
+		if err := hook("cleaned"); err != nil {
+			return err
+		}
+	}
 	if err := s.Root.Remove(metadata + "/rotation.json"); err != nil {
 		return err
 	}
 	if err := securefs.SyncDir(s.Root, metadata); err != nil {
 		return err
 	}
-	return s.Root.RemoveAll(dir)
+	return nil
 }
