@@ -197,3 +197,8 @@ structured report in JSON error details; human diagnostics show the issues and
 lock ownership evidence. Deep verification refuses pending operations even when
 an orphaned journal has no lock directory. Permission repair, plugin inspection,
 and explicit private diagnostic reports remain required follow-through.
+
+Retention/doctor hosted receipt at `f5e7ddf`:
+https://github.com/agensfield/fulla/actions/runs/33981694235. Both Linux and
+macOS passed the full race suite (including killed-process pruning recovery),
+static analysis, terminal and real clipboard acceptance, and cross-builds.
