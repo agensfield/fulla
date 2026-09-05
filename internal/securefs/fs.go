@@ -229,25 +229,37 @@ func PublishNew(root *os.Root, name string, data []byte) error {
 // Replace atomically updates an already-owned file. No-replace publication is
 // a distinct operation; ordinary create paths must not use Replace.
 func Replace(root *os.Root, name string, data []byte) error {
+	_, err := ReplacePublished(root, name, data)
+	return err
+}
+
+// ReplacePublished reports whether rename published the replacement, even if
+// synchronizing its parent directory subsequently fails. Publication alone does
+// not prove crash durability. Callers can preserve accurate applied-state errors.
+func ReplacePublished(root *os.Root, name string, data []byte) (bool, error) {
+	return replacePublished(root, name, data, SyncDir)
+}
+
+func replacePublished(root *os.Root, name string, data []byte, syncParent func(*os.Root, string) error) (bool, error) {
 	info, err := root.Lstat(name)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := ValidateInfo(name, info, true); err != nil {
-		return err
+		return false, err
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("not a file: %s", name)
+		return false, fmt.Errorf("not a file: %s", name)
 	}
 	tmp := filepath.Join(filepath.Dir(name), ".fulla-stage-"+ID())
 	if err := WriteNew(root, tmp, data); err != nil {
-		return err
+		return false, err
 	}
 	defer root.Remove(tmp)
 	if err := root.Rename(tmp, name); err != nil {
-		return err
+		return false, err
 	}
-	return SyncDir(root, filepath.Dir(name))
+	return true, syncParent(root, filepath.Dir(name))
 }
 
 func ID() string {

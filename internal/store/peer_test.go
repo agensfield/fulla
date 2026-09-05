@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/agensfield/fulla/internal/securefs"
 	"os"
 	"path/filepath"
@@ -140,5 +141,45 @@ func TestPeerRemovalReportsAppliedOnReleaseFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(s.Dir, metadata, "peers", "fixture.json")); !os.IsNotExist(err) {
 		t.Fatal("fixture did not remove peer")
+	}
+}
+
+func TestPeerSyncMarkReportsAppliedFailures(t *testing.T) {
+	for _, failure := range []string{"finalization", "lock-release"} {
+		for _, activated := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/activated=%v", failure, activated), func(t *testing.T) {
+				s := fixture(t, false)
+				identity, err := s.IdentityShow()
+				if err != nil {
+					t.Fatal(err)
+				}
+				p := Peer{Version: 1, Name: "fixture", Host: "fixture", Recipient: identity.Recipient, Fingerprint: identity.Fingerprint}
+				if err := s.SavePeer(p, false, ""); err != nil {
+					t.Fatal(err)
+				}
+				err = s.markPeer(p.Name, p.Fingerprint, identity.Fingerprint, activated, func() error {
+					if failure == "lock-release" {
+						return securefs.Replace(s.Root, "lock/owner", []byte("different-fixture-owner\n"))
+					}
+					return errors.New("fixture finalization failure")
+				})
+				var problem *fault.Error
+				if !errors.As(err, &problem) || problem.Status != 3 || problem.Details["applied"] != true {
+					t.Fatal("lost applied sync mark", err)
+				}
+				current, err := s.Peer(p.Name)
+				if err != nil || current.DryRunIdentity != identity.Fingerprint || current.Activated != activated {
+					t.Fatal("wrong published mark", err)
+				}
+				_, err = os.Stat(filepath.Join(s.Dir, "lock"))
+				if failure == "lock-release" {
+					if err != nil {
+						t.Fatal("removed changed-owner lock", err)
+					}
+				} else if !os.IsNotExist(err) {
+					t.Fatal("retained owned lock", err)
+				}
+			})
+		}
 	}
 }

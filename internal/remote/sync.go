@@ -141,7 +141,11 @@ func Sync(local *store.Store, peer store.Peer, client *Client, dryRun, strict bo
 			return result, partial(result, "sync data converged but remote activation was not acknowledged")
 		}
 		if err := local.MarkPeer(peer.Name, peer.Fingerprint, identity.Fingerprint, true); err != nil {
-			return result, partial(result, "sync data converged but local activation failed")
+			var problem *fault.Error
+			if errors.As(err, &problem) && problem.Details["applied"] == true {
+				result.Activated = true
+			}
+			return result, partial(result, "sync data converged but local activation did not finalize")
 		}
 		result.Activated = true
 	}

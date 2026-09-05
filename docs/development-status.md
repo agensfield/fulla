@@ -940,3 +940,33 @@ platforms: https://github.com/agensfield/fulla/actions/runs/33991840041.
 The full local Go 1.26.0 race suite and vet passed. Final store/remote
 regressions also passed with race detection, including fresh hello/bye discovery
 against a future sync domain.
+
+
+## Applied-state reporting for peer sync marks
+
+MarkPeer previously discarded lock-release errors and used a replacement helper
+that returned only an error. A successful rename followed by failed directory
+synchronization was therefore indistinguishable from failure before publication.
+The filesystem helper now exposes ReplacePublished, reporting whether rename
+occurred independently of the later fsync result; existing Replace callers retain
+their previous interface and behavior.
+
+Peer dry-run/activation marks use that publication result and return status 3 with
+applied=true after publication if finalization or lock release fails. Errors remain
+Fulla-owned and redacted. A local activation that is explicitly known to have
+published is also reflected in Sync's partial result instead of reporting
+activated=false; this still returns partial failure rather than clean success.
+
+The filesystem regression injects a directory-sync failure after rename and
+checks that the new bytes are visible, publication is reported, and no stage is
+left. A missing destination is a negative control for pre-publication failure.
+Four store cases cover dry-run/activation crossed with finalization/lock-release
+failure. They verify status 3, actual saved peer state, owned-lock cleanup, and
+preservation of a changed-owner lock. The injection seam is internal, never an
+environment or CLI option. These are deterministic process-level failure tests,
+not abrupt-death/power-loss durability proof. The broader activation crash and
+recovery program remains open.
+
+The full local Go 1.26.0 race suite and vet passed. Server-domain enforcement
+at `2bebb66` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33992089407.

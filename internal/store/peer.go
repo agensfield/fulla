@@ -258,7 +258,12 @@ func (s *Store) RemovePeerConfirmed(name string, confirm func(Peer) error) (err 
 	return nil
 }
 
-func (s *Store) MarkPeer(name, expected, localIdentity string, activated bool) (err error) {
+func (s *Store) MarkPeer(name, expected, localIdentity string, activated bool) error {
+	return s.markPeer(name, expected, localIdentity, activated, nil)
+}
+
+// afterPublish is an internal failure-injection seam, never user-controlled.
+func (s *Store) markPeer(name, expected, localIdentity string, activated bool, afterPublish func() error) (err error) {
 	if err := s.RequireDomain("sync"); err != nil {
 		return err
 	}
@@ -266,7 +271,16 @@ func (s *Store) MarkPeer(name, expected, localIdentity string, activated bool) (
 	if err != nil {
 		return err
 	}
-	defer lock.Release()
+	applied := false
+	defer func() {
+		if releaseErr := lock.Release(); releaseErr != nil && err == nil {
+			if applied {
+				err = fault.Applied("peer sync state published but lock release failed", name)
+			} else {
+				err = releaseErr
+			}
+		}
+	}()
 	if err := s.RequireDomain("sync"); err != nil {
 		return err
 	}
@@ -283,5 +297,12 @@ func (s *Store) MarkPeer(name, expected, localIdentity string, activated bool) (
 	if err != nil {
 		return err
 	}
-	return securefs.Replace(s.Root, metadata+"/peers/"+name+".json", data)
+	applied, err = securefs.ReplacePublished(s.Root, metadata+"/peers/"+name+".json", data)
+	if err == nil && afterPublish != nil {
+		err = afterPublish()
+	}
+	if err != nil && applied {
+		return fault.Applied("peer sync state published but finalization failed", name)
+	}
+	return err
 }
