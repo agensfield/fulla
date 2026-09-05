@@ -17,11 +17,12 @@ import (
 )
 
 type LockInfo struct {
-	Token string `json:"token"`
-	PID   int    `json:"pid"`
-	Host  string `json:"host"`
-	Alive bool   `json:"alive"`
-	Local bool   `json:"local"`
+	Token     string `json:"token"`
+	Operation string `json:"operation"`
+	PID       int    `json:"pid"`
+	Host      string `json:"host"`
+	Alive     bool   `json:"alive"`
+	Local     bool   `json:"local"`
 }
 
 func (s *Store) InspectLock() (*LockInfo, error) {
@@ -50,6 +51,8 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 			info.PID, _ = strconv.Atoi(value)
 		case "host":
 			info.Host = value
+		case "operation":
+			info.Operation = value
 		}
 	}
 	if info.PID <= 0 || info.Token == "" || info.Host == "" {
@@ -68,6 +71,10 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 }
 
 func (s *Store) Recover(expected string) (map[string]any, error) {
+	return s.recover(expected, s.Validate)
+}
+
+func (s *Store) recover(expected string, validate func() error) (map[string]any, error) {
 	if expected == "" {
 		return nil, fault.Interaction("recovery requires --recover-lock with the inspected owner token")
 	}
@@ -99,7 +106,7 @@ func (s *Store) Recover(expected string) (map[string]any, error) {
 	if again == nil || again.Token != expected || again.Alive || !again.Local {
 		return nil, fault.New("store.lock_changed", "lock changed during recovery preflight")
 	}
-	if err := s.Validate(); err != nil {
+	if err := validate(); err != nil {
 		return nil, err
 	}
 	count := 0
@@ -115,7 +122,11 @@ func (s *Store) Recover(expected string) (map[string]any, error) {
 	}
 	// Publish this invocation as owner before touching the journal. flock is
 	// released by the kernel on process death, so interrupted recovery retries.
-	newInfo := fmt.Sprintf("pid=%d host=%s operation=recover started=%s\n", os.Getpid(), info.Host, time.Now().UTC().Format(time.RFC3339))
+	operation := "recover"
+	if info.Operation == "fix-permissions" {
+		operation = info.Operation
+	}
+	newInfo := fmt.Sprintf("pid=%d host=%s operation=%s started=%s\n", os.Getpid(), info.Host, operation, time.Now().UTC().Format(time.RFC3339))
 	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
 		return nil, err
 	}

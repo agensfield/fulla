@@ -195,8 +195,8 @@ Doctor now includes backup statistics and peer-registry validation in structural
 inspection. An unhealthy report returns status 1 with `doctor.unhealthy` and a
 structured report in JSON error details; human diagnostics show the issues and
 lock ownership evidence. Deep verification refuses pending operations even when
-an orphaned journal has no lock directory. Permission repair remains required follow-through. Explicit private reports
-are implemented below.
+an orphaned journal has no lock directory. Explicit permission repair and private reports are implemented below; broader
+permission and diagnostic acceptance remains in progress.
 
 Retention/doctor hosted receipt at `f5e7ddf`:
 https://github.com/agensfield/fulla/actions/runs/33981694235. Both Linux and
@@ -250,3 +250,40 @@ CLI fixtures cover healthy deep inspection, unhealthy header inspection,
 redaction, 0600 mode, no replacement, unsafe destinations, and incompatible
 recovery flags. The preceding plugin diagnostics checkpoint passed hosted CI:
 https://github.com/agensfield/fulla/actions/runs/33982555589 (`b0f35ec`).
+
+## Explicit permission repair
+
+`doctor --fix-permissions` preflights the entire selected Fulla store, acquires
+the existing shared lock, and repeats preflight before changing ordinary POSIX
+mode bits. It removes group/other permissions while preserving regular-file
+owner bits, and restores directory owner access when the directory is still
+inspectable. It does not read identity or entry contents. A receipt records
+changes performed in this invocation; applied failures carry repair progress.
+
+Native descriptor-based ACL inspection uses Darwin fgetattrlist and Linux POSIX
+ACL xattrs. Repair refuses all ACL-bearing objects, unknown ACL-inspection
+failures, foreign owners, special modes/types, symlinks, hard links, and directories
+writable by other users. These require explicit manual review; Fulla never
+rewrites their ACLs. Unreadable objects cannot be automatically repaired without
+first being inspectable. Ordinary commands continue to enforce private POSIX
+modes. Broader ACL policy for ordinary inspection remains an acceptance item.
+
+Repair refuses another writer or a pending transaction. For a killed permission
+repair owner, inspect with `doctor`, then explicitly use
+`doctor --fix-permissions --recover-lock TOKEN`. Recovery requires a matching
+token, dead local PID, permission-repair operation, and no other pending journal;
+it repeats permission preflight and uses the existing recovery flock. This path
+cannot be used to bypass private-mode checks for unrelated transaction recovery.
+`--deep` and `--report` cannot be mixed with permission repair.
+
+Fixtures prove exact identity/ciphertext/Git-config preservation, idempotence,
+shared-lock exclusion, complete preflight before mutation, native ACL refusal,
+and real SIGKILL recovery after a partial mode-repair sequence. The killed fixture
+uses the production lock and mode-application primitives; it does not yet cover
+every kill boundary in the complete public command.
+
+The earlier macOS initialization failure at `d2f5752` remains unexplained.
+`eb60c09` improved failure diagnostics and added 20 repeated CI journeys per OS;
+both hosted jobs passed (run 33983151661). Local runs of 20 repetitions with
+Go 1.26.0 and 100 with Go 1.27.1 also passed. This is reproduction evidence,
+not a demonstrated root-cause fix.

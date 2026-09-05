@@ -174,3 +174,55 @@ func TestDiagnosticReportBeforeStoreOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDoctorExplicitPermissionRepair(t *testing.T) {
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "store")
+	invoke := func(args ...string) (int, []byte) {
+		var out, stderr bytes.Buffer
+		app := App{Out: &out, Err: &stderr, Getenv: func(key string) string {
+			if key == "HOME" {
+				return home
+			}
+			return ""
+		}}
+		code := app.Main(append([]string{"--store", dir, "--json"}, args...))
+		return code, out.Bytes()
+	}
+	if code, out := invoke("init", "--yes", "--no-git"); code != 0 {
+		t.Fatalf("init %d %s", code, out)
+	}
+	identity := filepath.Join(dir, "identities")
+	if err := os.Chmod(identity, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := invoke("doctor"); code != 1 {
+		t.Fatal("ordinary doctor accepted unsafe modes", code)
+	}
+	for _, flag := range []string{"--deep", "--report=unused.json"} {
+		if code, _ := invoke("doctor", "--fix-permissions", flag); code != 2 {
+			t.Fatal("accepted incompatible repair flag", code, flag)
+		}
+	}
+	info, err := os.Stat(identity)
+	if err != nil || info.Mode().Perm() != 0644 {
+		t.Fatal("implicit repair")
+	}
+	code, out := invoke("doctor", "--fix-permissions")
+	if code != 0 {
+		t.Fatalf("repair %d %s", code, out)
+	}
+	if !bytes.Contains(out, []byte(`"applied":1`)) {
+		t.Fatal("missing applied repair evidence", string(out))
+	}
+	info, err = os.Stat(identity)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("repair not applied")
+	}
+	if code, out := invoke("doctor"); code != 0 {
+		t.Fatalf("doctor after repair %d %s", code, out)
+	}
+}

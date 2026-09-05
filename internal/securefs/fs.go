@@ -38,7 +38,7 @@ func Canonical(name string, allowMissing bool) (string, error) {
 	return abs, nil
 }
 
-func ValidateInfo(name string, info fs.FileInfo, private bool) error {
+func validateObject(name string, info fs.FileInfo) error {
 	if !info.IsDir() && !info.Mode().IsRegular() {
 		return fmt.Errorf("non-regular private path: %s", name)
 	}
@@ -55,6 +55,13 @@ func ValidateInfo(name string, info fs.FileInfo, private bool) error {
 	if info.Mode()&(fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky) != 0 {
 		return fmt.Errorf("special mode bits: %s", name)
 	}
+	return nil
+}
+
+func ValidateInfo(name string, info fs.FileInfo, private bool) error {
+	if err := validateObject(name, info); err != nil {
+		return err
+	}
 	forbidden := fs.FileMode(0o022)
 	if private {
 		forbidden = 0o077
@@ -68,7 +75,13 @@ func ValidateInfo(name string, info fs.FileInfo, private bool) error {
 	return nil
 }
 
-func Open(name string) (*os.Root, error) {
+func Open(name string) (*os.Root, error) { return open(name, false) }
+
+// OpenForModeRepair permits mode issues only; callers must inspect the whole
+// tree and acquire the shared store lock before applying any repairs.
+func OpenForModeRepair(name string) (*os.Root, error) { return open(name, true) }
+
+func open(name string, repair bool) (*os.Root, error) {
 	name, err := Canonical(name, false)
 	if err != nil {
 		return nil, err
@@ -80,8 +93,13 @@ func Open(name string) (*os.Root, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("not a directory: %s", name)
 	}
-	if err := ValidateInfo(name, info, true); err != nil {
+	if err := validateObject(name, info); err != nil {
 		return nil, err
+	}
+	if !repair {
+		if err := ValidateInfo(name, info, true); err != nil {
+			return nil, err
+		}
 	}
 	root, err := os.OpenRoot(name)
 	if err != nil {

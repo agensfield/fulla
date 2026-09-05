@@ -33,6 +33,15 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 	if len(p.Args) != 0 {
 		return nil, fault.Usage("doctor takes no positional arguments")
 	}
+	if p.has("fix-permissions") {
+		if p.has("report") || p.has("deep") {
+			return nil, fault.Usage("permission repair must run separately from diagnostic inspection")
+		}
+		if p.has("recover-lock") {
+			return store.RecoverAndFixPermissions(c.StorePath, p.value("recover-lock"))
+		}
+		return store.FixPermissions(c.StorePath)
+	}
 	if p.has("recover-lock") {
 		if p.has("report") || p.has("deep") {
 			return nil, fault.Usage("lock recovery cannot be combined with diagnostic inspection")
@@ -62,6 +71,8 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 	if err == nil {
 		defer s.Close()
 		r, err = s.Doctor(p.has("deep"))
+	} else {
+		r.Lock, _ = store.PermissionLock(c.StorePath)
 	}
 	r.StorePath, r.ConfigPath, r.Sources = c.StorePath, c.ConfigPath, c.Sources
 	if p.has("report") {
@@ -93,6 +104,12 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 		problem := fault.New("doctor.unhealthy", "store requires attention; inspect the diagnostic report")
 		problem.Details["report"] = r
 		return nil, problem
+	}
+	if err != nil && r.Lock != nil {
+		var problem *fault.Error
+		if errors.As(err, &problem) {
+			problem.Details["report"] = r
+		}
 	}
 	return r, err
 }

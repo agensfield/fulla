@@ -231,7 +231,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return nil, false, err
 		}
 	case "doctor":
-		if err := p.allow("deep", "recover-lock", "report"); err != nil {
+		if err := p.allow("deep", "recover-lock", "report", "fix-permissions"); err != nil {
 			return nil, false, err
 		}
 	case "run":
@@ -450,6 +450,7 @@ const help = `Fulla: a local-first secret custodian (development build)
   fulla move OLD NEW                Move without overwriting
   fulla remove NAME                 Remove an entry
   fulla doctor --report PATH        Write a private redacted diagnostic report
+  fulla doctor --fix-permissions    Explicitly repair safe private mode issues
 
 Global: --store PATH, --config PATH, --json, --non-interactive, --help, --version
 The remaining locked command domains are under implementation.`

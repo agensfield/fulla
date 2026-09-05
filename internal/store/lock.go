@@ -18,7 +18,9 @@ type Lock struct {
 	held  bool
 }
 
-func (s *Store) Lock(operation string) (*Lock, error) {
+func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation, s.Validate) }
+
+func (s *Store) lock(operation string, validate func() error) (*Lock, error) {
 	if err := s.Unlocked(); err != nil {
 		return nil, err
 	}
@@ -46,7 +48,7 @@ func (s *Store) Lock(operation string) (*Lock, error) {
 	}
 	// Revalidate under the shared lock; another cooperating writer may have
 	// committed between initial validation and lock acquisition.
-	if err := s.Validate(); err != nil {
+	if err := validate(); err != nil {
 		_ = l.Release()
 		return nil, err
 	}
