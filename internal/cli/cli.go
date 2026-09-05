@@ -118,6 +118,17 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, fault.Usage("unexpected passthrough arguments")
 	}
 	switch p.Command {
+	case "doctor":
+		if err := p.allow("deep", "recover-lock"); err != nil {
+			return nil, false, err
+		}
+	case "run":
+		if err := p.allow("env", "clean-env", "inherit"); err != nil {
+			return nil, false, err
+		}
+		if p.has("json") {
+			return nil, false, fault.Usage("run owns child streams and does not support --json")
+		}
 	case "init":
 		if err := p.allow("no-git", "adopt", "dry-run"); err != nil {
 			return nil, false, err
@@ -163,8 +174,22 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, err
 	}
 	defer s.Close()
+	if p.Command == "doctor" {
+		if len(p.Args) != 0 {
+			return nil, false, fault.Usage("doctor takes no positional arguments")
+		}
+		if p.has("recover-lock") {
+			r, e := s.Recover(p.value("recover-lock"))
+			return r, false, e
+		}
+		r, e := s.Doctor(p.has("deep"))
+		return r, false, e
+	}
 	if err := s.Unlocked(); err != nil {
 		return nil, false, err
+	}
+	if p.Command == "run" {
+		return nil, true, a.run(p, c, s)
 	}
 	switch p.Command {
 	case "list", "status":

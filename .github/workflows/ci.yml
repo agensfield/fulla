@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Race and integration tests
+        run: go test -race ./...
+      - name: Static analysis
+        run: go vet ./...
+      - name: Four-platform builds
+        shell: bash
+        run: |
+          for target_os in darwin linux; do
+            for target_arch in arm64 amd64; do
+              CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" go build -trimpath -o "dist/fulla-$target_os-$target_arch" .
+            done
+          done

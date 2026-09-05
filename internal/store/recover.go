@@ -1,0 +1,145 @@
+package store
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/agensfield/fulla/internal/fault"
+	"github.com/agensfield/fulla/internal/securefs"
+)
+
+type LockInfo struct {
+	Token string `json:"token"`
+	PID   int    `json:"pid"`
+	Host  string `json:"host"`
+	Alive bool   `json:"alive"`
+	Local bool   `json:"local"`
+}
+
+func (s *Store) InspectLock() (*LockInfo, error) {
+	owner, err := securefs.Read(s.Root, "lock/owner", 256)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := securefs.Read(s.Root, "lock/info", 4096)
+	if err != nil {
+		return nil, fault.New("store.lock_unknown", "lock owner information is incomplete; manual inspection required")
+	}
+	info := &LockInfo{Token: strings.TrimSpace(string(owner))}
+	for _, word := range strings.Fields(string(data)) {
+		key, value, ok := strings.Cut(word, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "pid":
+			info.PID, _ = strconv.Atoi(value)
+		case "host":
+			info.Host = value
+		}
+	}
+	if info.PID <= 0 || info.Token == "" || info.Host == "" {
+		return nil, fault.New("store.lock_unknown", "cannot prove lock ownership")
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	info.Local = host == info.Host
+	if info.Local {
+		err := syscall.Kill(info.PID, 0)
+		info.Alive = !errors.Is(err, syscall.ESRCH)
+	}
+	return info, nil
+}
+
+func (s *Store) Recover(expected string) (map[string]any, error) {
+	if expected == "" {
+		return nil, fault.Interaction("recovery requires --recover-lock with the inspected owner token")
+	}
+	info, err := s.InspectLock()
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, fault.New("store.not_locked", "no stale shared lock exists")
+	}
+	if info.Token != expected {
+		return nil, fault.New("store.lock_changed", "lock token differs from expected owner")
+	}
+	if !info.Local || info.Alive {
+		return nil, fault.New("store.lock_active", "refusing live, remote, or unverifiable lock owner")
+	}
+	guard, err := s.Root.OpenFile("lock/recovery", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	defer guard.Close()
+	if err := unix.Flock(int(guard.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		return nil, fault.New("store.locked", "another recovery owns this lock")
+	}
+	again, err := s.InspectLock()
+	if err != nil {
+		return nil, err
+	}
+	if again == nil || again.Token != expected || again.Alive || !again.Local {
+		return nil, fault.New("store.lock_changed", "lock changed during recovery preflight")
+	}
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	// Publish this invocation as owner before touching the journal. flock is
+	// released by the kernel on process death, so interrupted recovery retries.
+	newInfo := fmt.Sprintf("pid=%d host=%s operation=recover started=%s\n", os.Getpid(), info.Host, time.Now().UTC().Format(time.RFC3339))
+	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
+		return nil, err
+	}
+	newToken := securefs.ID()
+	if err := securefs.Replace(s.Root, "lock/owner", []byte(newToken+"\n")); err != nil {
+		return nil, err
+	}
+	expected = newToken
+	data, err := securefs.Read(s.Root, metadata+"/pending.json", maxMetadata)
+	if errors.Is(err, fs.ErrNotExist) {
+		if err := s.Root.Remove("lock/recovery"); err != nil {
+			return nil, err
+		}
+		l := &Lock{store: s, Token: expected, held: true}
+		if err := l.Release(); err != nil {
+			return nil, err
+		}
+		return map[string]any{"recovered": false, "lock_released": true}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var j Journal
+	if err := StrictJSON(data, &j); err != nil {
+		return nil, err
+	}
+	if err := s.RequireDomain("transactions"); err != nil {
+		return nil, err
+	}
+	if err := s.finishJournal(&j, nil); err != nil {
+		return nil, fault.Applied("recovery did not finish; journal and shared lock retained", j.ID)
+	}
+	if err := s.Root.Remove("lock/recovery"); err != nil {
+		return nil, fault.Applied("recovery finalized but recovery lock cleanup failed", j.ID)
+	}
+	l := &Lock{store: s, Token: expected, held: true}
+	if err := l.Release(); err != nil {
+		return nil, fault.Applied("recovery finalized but shared lock cleanup failed", j.ID)
+	}
+	return map[string]any{"recovered": true, "transaction": j.ID, "lock_released": true}, nil
+}
