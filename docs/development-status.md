@@ -910,3 +910,33 @@ GOTOOLCHAIN=go1.26.0 go build -o dist/fulla .
 GOTOOLCHAIN=go1.26.0 go build -o dist/acceptance-sshd ./scripts/acceptance-sshd
 python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools dist/acceptance-sshd
 ```
+
+
+## Server-side sync-domain compatibility enforcement
+
+A future sync-domain fixture exposed a server/client asymmetry. Sync checked the
+local domain, but the remote server could authenticate and serve an inventory
+from a store whose persisted sync domain was v2. Four regression cases failed
+before the fix: current/previous protocol, with the domain changed before
+authentication or after session authentication.
+
+The server now checks the sync domain before issuing its authentication challenge
+and before subsequent operations. Public hello/bye discovery remains independent
+of sync support. Locks with an expected peer session also revalidate the sync
+domain while held, closing the gap between an earlier request check and mutation.
+MarkPeer checks the domain both before and after acquiring its lock, even when
+called independently of a remote session.
+
+The wire regression verifies typed metadata.unsupported and unchanged file
+contents on both stores. A store regression upgrades the manifest inside lock
+validation, verifies rejection and lock cleanup, then proves both direct dry-run
+and activation marks refuse the future domain without changing the peer. This is
+specific forward-domain enforcement, not completion of the transactional domain
+migration program or every activation crash/applied-state boundary.
+
+The combined real-pa/OpenSSH adoption journey at `c81b250` passed both hosted
+platforms: https://github.com/agensfield/fulla/actions/runs/33991840041.
+
+The full local Go 1.26.0 race suite and vet passed. Final store/remote
+regressions also passed with race detection, including fresh hello/bye discovery
+against a future sync domain.

@@ -259,11 +259,17 @@ func (s *Store) RemovePeerConfirmed(name string, confirm func(Peer) error) (err 
 }
 
 func (s *Store) MarkPeer(name, expected, localIdentity string, activated bool) (err error) {
+	if err := s.RequireDomain("sync"); err != nil {
+		return err
+	}
 	lock, err := s.Lock("peer sync-state")
 	if err != nil {
 		return err
 	}
 	defer lock.Release()
+	if err := s.RequireDomain("sync"); err != nil {
+		return err
+	}
 	p, err := s.Peer(name)
 	if err != nil {
 		return err

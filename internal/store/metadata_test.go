@@ -123,3 +123,60 @@ func TestOpenHandleRejectsMalformedManifest(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncDomainRevalidatedUnderSessionLock(t *testing.T) {
+	s := fixture(t, false)
+	identity, err := s.IdentityShow()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := Peer{Version: 1, Name: "fixture", Host: "fixture", Recipient: identity.Recipient, Fingerprint: identity.Fingerprint}
+	if err := s.SavePeer(peer, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	before, err := securefs.Read(s.Root, metadata+"/peers/fixture.json", maxMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ExpectedPeerName = peer.Name
+	s.ExpectedPeerFingerprint = peer.Fingerprint
+	newer := s.Meta
+	newer.Domains = map[string]int{}
+	for domain, value := range s.Meta.Domains {
+		newer.Domains[domain] = value
+	}
+	newer.Domains["sync"] = 2
+	data, err := json.Marshal(newer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Model an upgrade after the session's earlier domain check, before the
+	// lock's revalidation. The callback runs while the shared lock is held.
+	lock, err := s.lock("fixture sync", func() error {
+		return securefs.Replace(s.Root, metadata+"/store.json", data)
+	})
+	if lock != nil {
+		_ = lock.Release()
+		t.Fatal("lock accepted upgraded sync domain")
+	}
+	var problem *fault.Error
+	if !errors.As(err, &problem) || problem.Code != "metadata.unsupported" {
+		t.Fatal(err)
+	}
+	// MarkPeer must enforce its own domain even outside a remote session.
+	s.ExpectedPeerName = ""
+	s.ExpectedPeerFingerprint = ""
+	for _, activated := range []bool{false, true} {
+		err = s.MarkPeer(peer.Name, peer.Fingerprint, identity.Fingerprint, activated)
+		if !errors.As(err, &problem) || problem.Code != "metadata.unsupported" {
+			t.Fatal("marked future sync domain", err)
+		}
+	}
+	after, err := securefs.Read(s.Root, metadata+"/peers/fixture.json", maxMetadata)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("changed peer sync state", err)
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir, "lock")); !os.IsNotExist(err) {
+		t.Fatal("retained lock", err)
+	}
+}

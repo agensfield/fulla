@@ -64,6 +64,10 @@ func (s *Store) lock(operation string, validate func() error) (*Lock, error) {
 		}
 	}
 	if s.ExpectedPeerName != "" {
+		if err := s.RequireDomain("sync"); err != nil {
+			_ = l.Release()
+			return nil, err
+		}
 		peer, err := s.Peer(s.ExpectedPeerName)
 		if err != nil {
 			_ = l.Release()

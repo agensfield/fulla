@@ -46,6 +46,9 @@ func serve(s *store.Store, input io.Reader, output io.Writer) error {
 	if auth.Operation != "authenticate" || auth.Expected != identity.Fingerprint || auth.Version != request.Version {
 		return fault.New("peer.trust_mismatch", "authentication identity or protocol changed")
 	}
+	if err := s.RequireDomain("sync"); err != nil {
+		return err
+	}
 	peers, err := s.Peers()
 	if err != nil {
 		return err
@@ -109,6 +112,11 @@ func serve(s *store.Store, input io.Reader, output io.Writer) error {
 		m, err := readMessage(input)
 		if err != nil {
 			return err
+		}
+		if m.Operation != "bye" {
+			if err := s.RequireDomain("sync"); err != nil {
+				return err
+			}
 		}
 		switch m.Operation {
 		case "inventory":
