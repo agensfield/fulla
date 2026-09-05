@@ -50,7 +50,12 @@ func Recipients(data []byte, ui *plugin.ClientUI) ([]age.Recipient, error) {
 		case strings.HasPrefix(line, "age1"):
 			r, err = age.ParseX25519Recipient(line)
 			if err != nil {
-				r, err = plugin.NewRecipient(line, ui)
+				safeUI, state := pluginUI(ui)
+				var recipient *plugin.Recipient
+				recipient, err = plugin.NewRecipient(line, safeUI)
+				if err == nil {
+					r = &pluginRecipient{Recipient: recipient, interaction: state}
+				}
 			}
 		default:
 			err = fault.New("identity.unsupported", "unsupported recipient format")
@@ -82,11 +87,12 @@ func Identities(data []byte, ui *plugin.ClientUI) ([]age.Identity, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "AGE-PLUGIN-") {
-			id, err := plugin.NewIdentity(line, ui)
+			safeUI, state := pluginUI(ui)
+			id, err := plugin.NewIdentity(line, safeUI)
 			if err != nil {
 				return nil, fault.New("identity.invalid", "invalid plugin identity")
 			}
-			out = append(out, id)
+			out = append(out, &pluginIdentity{Identity: id, interaction: state})
 		} else {
 			ids, err := age.ParseIdentities(strings.NewReader(line))
 			if err != nil {
@@ -152,7 +158,7 @@ func VerifyRecipient(recipients []age.Recipient, identities []age.Identity) erro
 	}
 	p, err := Decrypt(c, identities)
 	var problem *fault.Error
-	if errors.As(err, &problem) && strings.HasPrefix(problem.Code, "plugin.") {
+	if errors.As(err, &problem) && (strings.HasPrefix(problem.Code, "plugin.") || problem.Code == "interaction.required") {
 		return err
 	}
 	if err != nil || string(p) != marker {

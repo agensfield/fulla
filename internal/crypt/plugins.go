@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"filippo.io/age"
-	"filippo.io/age/plugin"
 	"github.com/agensfield/fulla/internal/fault"
 )
 
@@ -26,13 +25,13 @@ type PluginStatus struct {
 func Plugins(identities []age.Identity, recipients []age.Recipient) []PluginStatus {
 	names := map[string]bool{}
 	for _, identity := range identities {
-		if p, ok := identity.(*plugin.Identity); ok {
-			names[p.Name()] = true
+		if name, ok := pluginName(identity); ok {
+			names[name] = true
 		}
 	}
 	for _, recipient := range recipients {
-		if p, ok := recipient.(*plugin.Recipient); ok {
-			names[p.Name()] = true
+		if name, ok := pluginName(recipient); ok {
+			names[name] = true
 		}
 	}
 	ordered := make([]string, 0, len(names))
@@ -63,6 +62,10 @@ func Plugins(identities []age.Identity, recipients []age.Recipient) []PluginStat
 }
 
 func pluginFailure(err error) error {
+	var problem *fault.Error
+	if errors.As(err, &problem) && (problem.Code == "interaction.required" || strings.HasPrefix(problem.Code, "plugin.")) {
+		return problem
+	}
 	var lookup *exec.Error
 	if !errors.As(err, &lookup) || !strings.HasPrefix(lookup.Name, "age-plugin-") {
 		return nil
@@ -83,12 +86,12 @@ func rejectPluginDebug(identities []age.Identity, recipients []age.Recipient) er
 	}
 	present := false
 	for _, id := range identities {
-		if _, ok := id.(*plugin.Identity); ok {
+		if _, ok := pluginName(id); ok {
 			present = true
 		}
 	}
 	for _, recipient := range recipients {
-		if _, ok := recipient.(*plugin.Recipient); ok {
+		if _, ok := pluginName(recipient); ok {
 			present = true
 		}
 	}

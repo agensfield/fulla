@@ -542,3 +542,35 @@ passed. These tests run in the standard hosted race suite.
 Coverage remains bounded to these publication seams. Pre-journal process death,
 power-loss durability, arbitrary syscall interruption, and all other workflow
 boundaries still require their own acceptance evidence.
+
+
+## Working plugin fixture and typed interaction boundary
+
+A real mock-plugin subprocess exposed that Fulla supplied a nil `ClientUI` to
+age's plugin client. The first valid plugin response triggered a nil-pointer
+panic in `ClientUI.readStanza`; previous missing-plugin fixtures never reached
+that path. Parsed plugin objects now receive a non-nil UI with noninteractive
+input/confirmation refusal. Informational plugin messages produce no unsolicited
+output when no display callback is supplied.
+
+The official client translates callback errors into protocol failures, so Fulla
+retains redacted per-operation interaction state around plugin Wrap/Unwrap.
+Missing input/confirmation becomes `interaction.required`, including during
+recipient consistency verification; supplied callback failure becomes
+`plugin.interaction_failed`. Reused objects reset this state and serialize their
+operations. Recipient labels continue through the official WrapWithLabels API.
+Missing-plugin inspection and the AGEDEBUG guard recognize the wrapped objects.
+
+`plugin_fixture_test.go` launches the test binary as `age-plugin-fullafixture`,
+uses native X25519 for actual file-key protection, and speaks the official plugin
+protocol. Fixtures cover exact binary round-trip, consistency verification, PIN
+and confirmation refusal, successful reuse after refusal, explicit UI-supplied
+PIN input, and redacted callback errors. Only generated keys and values are used.
+
+This proves the core plugin boundary. Controlling-terminal PIN UI, hardware-touch
+timeout behavior, hardware integration, and broader CLI acceptance remain open.
+The preceding killed-transaction checkpoint `73e682d` passed hosted Linux/macOS
+CI: https://github.com/agensfield/fulla/actions/runs/33986961005.
+
+The full local Go 1.26.0 race suite and vet passed, including the working mock,
+existing missing-plugin/debug-mode fixtures, and native crypto/store tests.
