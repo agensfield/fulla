@@ -84,6 +84,9 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 			return result, err
 		}
 	}
+	if err := copyTree(s.Root, "passwords", dir+"/before/passwords"); err != nil {
+		return result, err
+	}
 	names := []string{}
 	for name := range values {
 		names = append(names, name)
@@ -98,12 +101,6 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		old, err := s.Ciphertext(name)
 		if err == nil {
 			change.Before = digest(old)
-			if err := s.Root.MkdirAll(dir+"/before/"+path.Dir(p), 0o700); err != nil {
-				return result, err
-			}
-			if err := securefs.WriteNew(s.Root, dir+"/before/"+p, old); err != nil {
-				return result, err
-			}
 		} else {
 			exists, e := s.Exists(name)
 			if e != nil {
@@ -136,7 +133,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 	if err := securefs.WriteNew(s.Root, dir+"/journal.json", data); err != nil {
 		return result, err
 	}
-	if err := securefs.WriteNew(s.Root, metadata+"/pending.json", data); err != nil {
+	if err := securefs.PublishNew(s.Root, metadata+"/pending.json", data); err != nil {
 		return result, err
 	}
 	pending = true
@@ -297,6 +294,22 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 		if err := copyTree(s.Root, dir, stage); err != nil {
 			return err
 		}
+		if err := s.Root.RemoveAll(stage + "/after"); err != nil {
+			return err
+		}
+		if err := s.Root.Mkdir(stage+"/after", 0o700); err != nil {
+			return err
+		}
+		if err := copyTree(s.Root, "passwords", stage+"/after/passwords"); err != nil {
+			return err
+		}
+		finalJournal, err := json.Marshal(j)
+		if err != nil {
+			return err
+		}
+		if err := securefs.Replace(s.Root, stage+"/journal.json", finalJournal); err != nil {
+			return err
+		}
 		parent, err := s.Root.OpenRoot(metadata + "/backups")
 		if err != nil {
 			return err
@@ -318,7 +331,7 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 		return err
 	}
 	if _, err := s.Root.Lstat(receipt); errors.Is(err, fs.ErrNotExist) {
-		if err := securefs.WriteNew(s.Root, receipt, data); err != nil {
+		if err := securefs.PublishNew(s.Root, receipt, data); err != nil {
 			return err
 		}
 	} else if err != nil {

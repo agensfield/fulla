@@ -50,6 +50,28 @@ func (s *Store) Lock(operation string) (*Lock, error) {
 		_ = l.Release()
 		return nil, err
 	}
+	if s.ExpectedFingerprint != "" {
+		identity, err := s.IdentityShow()
+		if err != nil {
+			_ = l.Release()
+			return nil, err
+		}
+		if identity.Fingerprint != s.ExpectedFingerprint {
+			_ = l.Release()
+			return nil, fault.New("peer.trust_mismatch", "local identity changed during peer session")
+		}
+	}
+	if s.ExpectedPeerName != "" {
+		peer, err := s.Peer(s.ExpectedPeerName)
+		if err != nil {
+			_ = l.Release()
+			return nil, err
+		}
+		if peer.Fingerprint != s.ExpectedPeerFingerprint {
+			_ = l.Release()
+			return nil, fault.New("peer.trust_mismatch", "peer authorization changed during session")
+		}
+	}
 	return l, nil
 }
 

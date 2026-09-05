@@ -200,7 +200,7 @@ func Adopt(directory string, dryRun bool, ui *plugin.ClientUI) (result InitResul
 	}
 	stage := ".fulla-adopt-" + securefs.ID()
 	defer s.Root.RemoveAll(stage)
-	if err := writeMetadata(s.Root, stage, newMetadata(), "init --adopt"); err != nil {
+	if err := writeMetadata(s.Root, stage, newMetadata(), "init"); err != nil {
 		return result, err
 	}
 	if err := securefs.RenameNew(s.Root, stage, metadata); err != nil {

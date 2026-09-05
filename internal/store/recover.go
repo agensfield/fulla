@@ -27,7 +27,10 @@ type LockInfo struct {
 func (s *Store) InspectLock() (*LockInfo, error) {
 	owner, err := securefs.Read(s.Root, "lock/owner", 256)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		if _, statErr := s.Root.Lstat("lock"); errors.Is(statErr, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fault.New("store.lock_unknown", "shared lock exists without a complete owner record")
 	}
 	if err != nil {
 		return nil, err
@@ -112,6 +115,30 @@ func (s *Store) Recover(expected string) (map[string]any, error) {
 	expected = newToken
 	data, err := securefs.Read(s.Root, metadata+"/pending.json", maxMetadata)
 	if errors.Is(err, fs.ErrNotExist) {
+		rotationData, rotationErr := securefs.Read(s.Root, metadata+"/rotation.json", maxMetadata)
+		if rotationErr == nil {
+			if err := s.RequireDomain("identity"); err != nil {
+				return nil, err
+			}
+			var rotation Rotation
+			if err := StrictJSON(rotationData, &rotation); err != nil {
+				return nil, err
+			}
+			if err := s.finishRotation(&rotation, nil); err != nil {
+				return nil, fault.Applied("identity rotation recovery incomplete; lock retained", rotation.ID)
+			}
+			if err := s.Root.Remove("lock/recovery"); err != nil {
+				return nil, err
+			}
+			l := &Lock{store: s, Token: expected, held: true}
+			if err := l.Release(); err != nil {
+				return nil, fault.Applied("rotation recovered but lock release failed", rotation.ID)
+			}
+			return map[string]any{"recovered": true, "transaction": rotation.ID, "lock_released": true}, nil
+		}
+		if !errors.Is(rotationErr, fs.ErrNotExist) {
+			return nil, rotationErr
+		}
 		if err := s.Root.Remove("lock/recovery"); err != nil {
 			return nil, err
 		}

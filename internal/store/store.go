@@ -32,10 +32,13 @@ type Metadata struct {
 }
 
 type Store struct {
-	Dir  string
-	Root *os.Root
-	Meta Metadata
-	UI   *plugin.ClientUI
+	Dir                     string
+	Root                    *os.Root
+	Meta                    Metadata
+	UI                      *plugin.ClientUI
+	ExpectedFingerprint     string
+	ExpectedPeerName        string
+	ExpectedPeerFingerprint string
 }
 
 func Open(directory string, adopted bool, ui *plugin.ClientUI) (*Store, error) {
@@ -291,12 +294,12 @@ func (s *Store) Unlocked() error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	entries, err := s.Root.ReadFile(metadata + "/pending.json")
-	if err == nil && len(entries) > 0 {
-		return fault.New("transaction.pending", "explicit transaction recovery is required")
-	}
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	for _, pending := range []string{"pending.json", "rotation.json"} {
+		if _, err := s.Root.Lstat(metadata + "/" + pending); err == nil {
+			return fault.New("transaction.pending", "explicit transaction recovery is required")
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
 	}
 	return nil
 }
