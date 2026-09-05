@@ -98,10 +98,21 @@ func (s *Store) BackupShow(id string) (Journal, error) {
 	return j, nil
 }
 
+type BackupRestorePlan struct {
+	ID       string   `json:"id"`
+	Phase    string   `json:"phase"`
+	Added    []string `json:"added"`
+	Replaced []string `json:"replaced"`
+	Removed  []string `json:"removed"`
+}
+
 func (s *Store) BackupRestore(id, phase string) (MutationResult, error) {
-	result := MutationResult{}
-	if _, err := s.BackupShow(id); err != nil {
-		return result, err
+	return s.BackupRestoreConfirmed(id, phase, nil)
+}
+
+func (s *Store) BackupRestoreConfirmed(id, phase string, confirm func(BackupRestorePlan) error) (result MutationResult, err error) {
+	if !validID(id) {
+		return result, fault.Usage("invalid backup identifier")
 	}
 	if phase != "before" && phase != "after" {
 		return result, fault.Usage("backup phase must be before or after")
@@ -113,14 +124,22 @@ func (s *Store) BackupRestore(id, phase string) (MutationResult, error) {
 	owned := true
 	defer func() {
 		if owned {
-			_ = lock.Release()
+			if e := lock.Release(); e != nil && err == nil {
+				err = e
+			}
 		}
 	}()
+	if _, err := s.BackupShow(id); err != nil {
+		return result, err
+	}
 	if _, err := s.CleanGit(); err != nil {
 		return result, err
 	}
-	_, rs, err := s.Keys()
+	active, rs, err := s.Keys()
 	if err != nil {
+		return result, err
+	}
+	if err := crypt.VerifyRecipient(rs, active); err != nil {
 		return result, err
 	}
 	ids, err := s.RecoveryKeys()
@@ -155,6 +174,12 @@ func (s *Store) BackupRestore(id, phase string) (MutationResult, error) {
 			return err
 		}
 		c, err = crypt.Encrypt(plain, rs)
+		clear(plain)
+		if err != nil {
+			return err
+		}
+		verified, err := crypt.Decrypt(c, active)
+		clear(verified)
 		if err != nil {
 			return err
 		}
@@ -168,9 +193,31 @@ func (s *Store) BackupRestore(id, phase string) (MutationResult, error) {
 	if err != nil {
 		return result, err
 	}
+	plan := BackupRestorePlan{ID: id, Phase: phase, Added: []string{}, Replaced: []string{}, Removed: []string{}}
+	liveSet := map[string]bool{}
 	for _, name := range live {
+		liveSet[name] = true
 		if _, ok := values[name]; !ok {
 			values[name] = nil
+			plan.Removed = append(plan.Removed, name)
+		}
+	}
+	for name, ciphertext := range values {
+		if ciphertext == nil {
+			continue
+		}
+		if liveSet[name] {
+			plan.Replaced = append(plan.Replaced, name)
+		} else {
+			plan.Added = append(plan.Added, name)
+		}
+	}
+	sort.Strings(plan.Added)
+	sort.Strings(plan.Replaced)
+	sort.Strings(plan.Removed)
+	if confirm != nil {
+		if err := confirm(plan); err != nil {
+			return result, err
 		}
 	}
 	owned = false

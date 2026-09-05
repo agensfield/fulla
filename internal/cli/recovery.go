@@ -74,14 +74,16 @@ func (a *App) recovery(p invocation, s *store.Store) (any, error) {
 		if len(p.Args) != 1 {
 			return nil, fault.Usage("backup restore requires a backup identifier")
 		}
-		if !p.has("yes") {
+		if !p.has("yes") && (p.has("json") || p.has("non-interactive")) {
 			return nil, fault.Interaction("backup restore requires --yes; the live entry set will match the selected snapshot")
 		}
 		phase := p.value("phase")
 		if phase == "" {
 			phase = "before"
 		}
-		return s.BackupRestore(p.Args[0], phase)
+		return s.BackupRestoreConfirmed(p.Args[0], phase, func(plan store.BackupRestorePlan) error {
+			return a.confirm(p, fmt.Sprintf("Restore snapshot %s (%s).\nAdd: %q\nReplace: %q\nRemove: %q\nThe current entry set is retained in an encrypted backup. Continue? [y/N]: ", plan.ID, plan.Phase, plan.Added, plan.Replaced, plan.Removed))
+		})
 	}
 	return nil, fault.Usage("unknown recovery command")
 }

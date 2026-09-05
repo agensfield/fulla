@@ -387,3 +387,31 @@ restoration, and missing-entry recovery. Real PTY acceptance covers decline,
 SIGTERM, no value disclosure, replacement/recreation wording, and prompt-free
 agent refusal. The Python harness passes Ruff/basedpyright. Initialization at
 `f048673` passed hosted CI: https://github.com/agensfield/fulla/actions/runs/33984832320.
+
+
+## Snapshot restore confirmation
+
+`backup restore ID --phase before|after` prepares a sorted add/replace/remove
+plan while holding the shared store lock, then asks through the controlling
+terminal. The prompt contains names only. Decline or handled interruption
+releases the lock without changing values or creating a transaction snapshot.
+JSON/noninteractive use requires `--yes` and performs the same locked preflight.
+Application retains the displaced entry set through the journaled backup path.
+
+Preflight validates the active identity/recipient pair even for an empty selected
+snapshot, preventing removal of live entries when current keys are inconsistent.
+Selected historical values are re-encrypted and verified under the active identity;
+plaintext buffers are cleared after use. Snapshot lookup now occurs under the
+lock so a concurrent prune cannot invalidate the selected backup.
+
+Store tests cover exact binary restoration, the three plan categories, competing
+writer exclusion, cancellation preservation, and mismatched keys with an empty
+snapshot. Real PTY acceptance covers decline, SIGTERM, successful removal of an
+extra entry, exact-byte restore, and prompt-free agent refusal. Go 1.26.0 full
+race tests and vet, Ruff, basedpyright, and PTY acceptance passed locally.
+Historical restore at `ff1b7ec` passed hosted Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33985186278.
+
+Remaining recovery acceptance includes the complete crash matrix, full-disaster
+guided flow, and source provenance/retired-key lifecycle review. This checkpoint
+does not establish complete recovery or release acceptance.

@@ -235,9 +235,42 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     assert code == 0 and b"Recreate the missing entry" in output
     assert cli("show", "restore-target") == historical
 
+    snapshot_bytes = b"synthetic-snapshot-value\x00\xff"
+    snapshot_result = cast(dict[str, object], json.loads(cli("add", "snapshot-base", "--stdin", "--json", data=snapshot_bytes)))
+    snapshot_data = cast(dict[str, str], snapshot_result["data"])
+    snapshot_id = snapshot_data["transaction"]
+    _ = cli("edit", "snapshot-base", "--stdin", data=b"changed-snapshot-value")
+    _ = cli("add", "snapshot-extra", "--stdin", data=b"extra-snapshot-value")
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(["backup", "restore", snapshot_id, "--phase", "after", *flags], [])
+        assert code == 1 and b"Continue?" not in output
+    code, output = terminal(
+        ["backup", "restore", snapshot_id, "--phase", "after"],
+        [(b"Continue? [y/N]:", b"n\n")],
+    )
+    assert code == 1 and b'Remove: ["snapshot-extra"]' in output
+    assert cli("show", "snapshot-base") == b"changed-snapshot-value"
+    assert cli("show", "snapshot-extra") == b"extra-snapshot-value"
+    assert b"synthetic-snapshot-value" not in output
+    assert not (store / "lock").exists()
+    code, _ = terminal(
+        ["backup", "restore", snapshot_id, "--phase", "after"],
+        [(b"Continue? [y/N]:", signal.SIGTERM)],
+    )
+    assert code == 143 and cli("show", "snapshot-extra") == b"extra-snapshot-value"
+    assert not (store / "lock").exists()
+    code, output = terminal(
+        ["backup", "restore", snapshot_id, "--phase", "after"],
+        [(b"Continue? [y/N]:", b"y\n")],
+    )
+    assert code == 0 and cli("show", "snapshot-base") == snapshot_bytes
+    assert not (store / "passwords" / "snapshot-extra.age").exists()
+    assert b"synthetic-snapshot-value" not in output
+
 print(
     json.dumps(
         {
+            "snapshot_restore_confirmation": True,
             "history_restore_confirmation": True,
             "initialization_confirmation": True,
             "adoption_identity_preserved": True,
