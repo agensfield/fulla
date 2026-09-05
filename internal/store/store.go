@@ -176,6 +176,11 @@ func (s *Store) Names() ([]string, error) {
 		if e.IsDir() {
 			return nil
 		}
+		// Shell pa creates this Git metadata file beside its encrypted entries.
+		// Preserve it as repository configuration, never as a password entry.
+		if name == "passwords/.gitattributes" {
+			return nil
+		}
 		if !strings.HasSuffix(name, ".age") {
 			return fault.New("store.invalid", "unexpected file in password directory")
 		}

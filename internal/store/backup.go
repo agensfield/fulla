@@ -158,6 +158,10 @@ func (s *Store) BackupRestoreConfirmed(id, phase string, confirm func(BackupRest
 			}
 			return nil
 		}
+		if p == base+"/.gitattributes" {
+			// Entry-set recovery preserves the live repository configuration.
+			return nil
+		}
 		if !strings.HasSuffix(p, ".age") {
 			return fault.New("backup.invalid", "unexpected backup file")
 		}

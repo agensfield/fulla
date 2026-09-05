@@ -36,6 +36,19 @@ jobs:
           go build -o dist/fulla .
           python3 scripts/acceptance-interactive.py dist/fulla
           python3 scripts/acceptance-clipboard.py dist/fulla
+      - name: Checkout pinned shell-pa predecessor
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ardasevinc/pa
+          ref: f75734b8775f72d5d2f9630c08c2b48bdb6d8104
+          path: dist/pa-predecessor
+          persist-credentials: false
+      - name: Real shell-pa adoption and rollback
+        shell: bash
+        run: |
+          GOBIN="$PWD/dist/pa-tools" go install filippo.io/age/cmd/age@v1.3.2
+          GOBIN="$PWD/dist/pa-tools" go install filippo.io/age/cmd/age-keygen@v1.3.2
+          python3 scripts/acceptance-pa.py dist/fulla dist/pa-predecessor dist/pa-tools
       - name: Isolated X11 clipboard dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth

@@ -455,3 +455,34 @@ or cover every syscall, pre-journal boundary, or interrupted recovery invocation
 
 The cleanup-order fix at `dacdceb` passed hosted Linux/macOS CI:
 https://github.com/agensfield/fulla/actions/runs/33985877145.
+
+
+## Real shell-pa adoption and rollback
+
+The pinned predecessor `ardasevinc/pa@f75734b8775f72d5d2f9630c08c2b48bdb6d8104`
+creates `passwords/.gitattributes`. A real shell-created fixture exposed that
+Fulla rejected this as an unexpected entry during adoption preflight. Inventory
+now recognizes that exact root metadata path, and snapshot entry-set restoration
+skips its saved copy while preserving current Git configuration. Other unexpected
+files, including nested `.gitattributes`, still fail entry validation.
+
+`scripts/acceptance-pa.py` extracts the pinned shell implementation into a private
+temporary home and creates its store with the official age 1.3.2 command tools.
+It verifies read-only adoption preview, byte-for-byte preservation of predecessor
+files during adoption, alternating shell-pa/Fulla reads and writes (empty, newline,
+NUL, invalid UTF-8, and 256 KiB values), moves/removal, shared-lock writer refusal,
+and shell-only CRUD after ceasing Fulla use. Identities and recipients remain
+unchanged. Only generated fixture values enter stdin; no ambient secret-value
+variables, installed user stores, or user Git configuration are used.
+
+Local real-shell acceptance passed. CI now checks out the exact public predecessor
+and builds age tools into `dist/pa-tools`, then runs the same drill on Linux/macOS.
+Go fixtures additionally check snapshot restore preserves `.gitattributes` and
+exact bytes while rejecting unrelated metadata paths. Full sync activation and
+rollback after synchronization remain separate acceptance work; this fixture does
+not claim the entire pa-adoption journey. Imported/custom Git configuration trust
+and filter behavior remain part of the broader security review.
+
+The full Go 1.26.0 race suite and vet passed, along with Ruff/basedpyright for
+the new harness. The preceding killed-rotation checkpoint `486618c` passed
+hosted Linux/macOS CI: https://github.com/agensfield/fulla/actions/runs/33986026518.
