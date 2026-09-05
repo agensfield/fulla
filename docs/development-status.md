@@ -641,3 +641,28 @@ https://github.com/agensfield/fulla/actions/runs/33987854529.
 
 The full local Go 1.26.0 race suite and vet passed, including recovery streams,
 working plugin fixtures, and native archive/bundle authentication tests.
+
+
+## Full restore confirmation and plugin-backed validation
+
+Full-state restore now supplies the controlling-terminal plugin UI when opening
+and deeply verifying private staging. After complete archive authentication,
+Git conversion checks, and entry verification, human callers receive a default-no
+publication prompt with file/byte counts and the identity/peer-authority cloning
+warning. JSON and noninteractive callers still require explicit --yes; that flag
+does not bypass plugin interaction policy.
+
+Deep verification preserves plugin cancellation and interaction errors for each
+entry, and clears discarded plaintext. Store tests cover absent and empty target
+cancellation, occupied-during-confirmation refusal, staging cleanup, and corrupt
+archives rejected before confirmation. Real PTY acceptance restores a working
+plugin-backed store, checks machine-mode refusal without prompting, cancels
+while decrypting an entry and at final confirmation, declines with empty input,
+then accepts and verifies the restored value and identity. The terminal harness
+now consumes matched prompts so repeated PIN steps cannot match stale output.
+
+Local PTY acceptance and focused archive race tests passed. Hardware touch and
+wait/timeout policy, abrupt-death staging recovery, and release acceptance remain
+open. Earlier stream checkpoint 2eaecf4 passed Linux/macOS hosted CI run 33988306509.
+
+The complete local Go 1.26.0 race suite and vet also passed for this checkpoint.

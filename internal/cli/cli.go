@@ -272,7 +272,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if len(p.Args) != 1 || p.has("phase") {
 			return nil, false, fault.Usage("full restore requires one archive path and no snapshot phase")
 		}
-		if !p.has("yes") {
+		if !p.has("yes") && (p.has("json") || p.has("non-interactive")) {
 			return nil, false, fault.Interaction("full restore requires --yes and an empty target; it clones identity and peer authority")
 		}
 		ids, e := transferIdentities(p, nil)
@@ -283,7 +283,9 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if e != nil {
 			return nil, false, e
 		}
-		r, e := store.RestoreFull(data, ids, c.StorePath)
+		r, e := store.RestoreFullConfirmed(data, ids, c.StorePath, commandPluginUI(p), func(plan store.ArchiveResult) error {
+			return a.confirm(p, fmt.Sprintf("Restore %d files (%d bytes) into %q.\nThis clones the original identity and peer authority. Use it to replace a lost machine, not to enroll another live peer.\nPublish restored store? [y/N]: ", plan.Files, plan.Bytes, plan.Path))
+		})
 		return r, false, e
 	}
 	if p.Command == "init" {

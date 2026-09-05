@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"filippo.io/age/plugin"
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
@@ -149,7 +150,13 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 	return result, nil
 }
 
-func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (result ArchiveResult, err error) {
+func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (ArchiveResult, error) {
+	return RestoreFullConfirmed(ciphertext, identities, target, nil, nil)
+}
+
+// RestoreFullConfirmed validates private staging before asking to publish it.
+// The callback receives only metadata; cancellation removes unpublished staging.
+func RestoreFullConfirmed(ciphertext []byte, identities []age.Identity, target string, ui *plugin.ClientUI, confirm func(ArchiveResult) error) (result ArchiveResult, err error) {
 	result.Path = target
 	result.IdentityCloned = true
 	result.Warning = "This restore clones the original identity and peer authority. Use it to replace a lost machine, not to onboard a live peer."
@@ -252,15 +259,15 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (r
 	if len(remaining) == 1<<20 {
 		return result, fault.New("recovery.invalid_archive", "excessive archive padding")
 	}
-	s, err := Open(filepath.Join(parent, stage), true, nil)
+	s, err := Open(filepath.Join(parent, stage), true, ui)
 	if err != nil {
 		return result, err
 	}
-	if err := s.DeepVerify(); err != nil {
+	if _, err := s.CleanGit(); err != nil {
 		s.Close()
 		return result, err
 	}
-	if _, err := s.CleanGit(); err != nil {
+	if err := s.DeepVerify(); err != nil {
 		s.Close()
 		return result, err
 	}
@@ -271,6 +278,12 @@ func RestoreFull(ciphertext []byte, identities []age.Identity, target string) (r
 	s.Close()
 	if err := securefs.SyncDir(staged, "."); err != nil {
 		return result, err
+	}
+	result.Bytes = total
+	if confirm != nil {
+		if err := confirm(result); err != nil {
+			return result, err
+		}
 	}
 	if emptyExisting {
 		if err := root.Remove(filepath.Base(target)); err != nil {

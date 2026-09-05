@@ -49,12 +49,14 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
             os.execve(binary, command + args, env)
         output = bytearray()
         pending = list(actions)
+        consumed = 0
         deadline = time.monotonic() + 15
         result = None
         try:
             while time.monotonic() < deadline:
-                if pending and pending[0][0] in output:
-                    _, response = pending.pop(0)
+                if pending and pending[0][0] in output[consumed:]:
+                    marker, response = pending.pop(0)
+                    consumed = output.index(marker, consumed) + len(marker)
                     if isinstance(response, int):
                         os.kill(pid, response)
                     else:
@@ -354,10 +356,62 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     assert b"\x1b[31m" not in output and b"fixture message" in output
     env["FULLA_PLUGIN_FIXTURE_REQUEST"] = ""
 
+    archive = home / "plugin-full.age"
+    assert (
+        plugin_cli(
+            "backup",
+            "export",
+            "--full",
+            "--recipient",
+            (store / "recipients").read_text().strip(),
+            "--output",
+            str(archive),
+        ).returncode
+        == 0
+    )
+    restored = home / "plugin-restored"
+    restore_args = [
+        "backup",
+        "restore",
+        str(archive),
+        "--full",
+        "--identity",
+        str(store / "identities"),
+    ]
+    env["FULLA_PLUGIN_FIXTURE_REQUEST"] = "1"
+    pin = (b"value (hidden):", b"fixture-pin\n")
+    for flags in (["--json", "--yes"], ["--non-interactive", "--yes"]):
+        code, output = terminal(restore_args + flags, [], target=restored)
+        assert code == 1 and b"interaction.required" in output
+        assert b"value (hidden):" not in output and not restored.exists()
+    # Cancel during an entry decrypt, after the key-consistency challenge.
+    code, output = terminal(
+        restore_args, [pin, (b"value (hidden):", signal.SIGTERM)], target=restored
+    )
+    assert code == 143 and not restored.exists()
+    assert not list(home.glob(".fulla-restore-*"))
+    for response, expected in ((b"\n", 1), (signal.SIGTERM, 143), (b"y\n", 0)):
+        code, output = terminal(
+            restore_args,
+            [pin, pin, pin, (b"Publish restored store? [y/N]:", response)],
+            target=restored,
+        )
+        assert code == expected, output
+        assert b"clones the original identity and peer authority" in output
+        assert b"fixture-pin" not in output and b"plugin-fixture-value" not in output
+        assert restored.exists() == (expected == 0)
+        assert not list(home.glob(".fulla-restore-*"))
+    code, output = terminal(["show", "entry"], [pin], target=restored)
+    assert code == 0 and b"plugin-fixture-value" in output
+    assert (restored / "identities").read_bytes() == (
+        plugin_store / "identities"
+    ).read_bytes()
+
 print(
     json.dumps(
         {
             "plugin_terminal_interaction": True,
+            "full_restore_confirmation_and_plugin": True,
             "snapshot_restore_confirmation": True,
             "history_restore_confirmation": True,
             "initialization_confirmation": True,

@@ -284,8 +284,14 @@ func (s *Store) DeepVerify() error {
 		if err != nil {
 			return err
 		}
-		if _, err := crypt.Decrypt(c, ids); err != nil {
-			e := fault.New("store.decrypt_failed", "entry verification failed")
+		plain, err := crypt.Decrypt(c, ids)
+		clear(plain)
+		if err != nil {
+			classified := streamFailure(err, "store.decrypt_failed", "entry verification failed")
+			var e *fault.Error
+			if !errors.As(classified, &e) || e.Code != "store.decrypt_failed" {
+				return classified
+			}
 			e.Details["name"] = name
 			return e
 		}
