@@ -81,7 +81,7 @@ acceptance. All leaves must remain accounted for in the machine/TTY matrix.
 | History | `history list`, `history show`, `history restore` | Complete human/agent journey and source/applied evidence review. |
 | Backups | `backup list`, `backup show`, `backup restore`, `backup prune`, `backup export` | Full-state composite restore, pre-publication cleanup, permanent-delete/retained-snapshot semantics. |
 | Inspection | `status`, `doctor` | Every failure/partial-state machine result, structural versus deep scope, permission repair boundaries. |
-| Expert/distribution | `git`, `completion`, `version` | Git execution/config/output bounds, real Fish behavior, installed version/distribution proof. |
+| Expert/distribution | `git`, `completion`, `version` | Git execution/config/output bounds, broader Fish integration behavior, installed version/distribution proof. |
 
 ## Release and delivery gates
 
@@ -98,7 +98,7 @@ acceptance. All leaves must remain accounted for in the machine/TTY matrix.
 
 1. Resolve F7/F8: a domain migration / older-binary recovery policy. Current version guards must not stand in for it.
 2. Complete J3 and J1 with an explicit command/input/authority table, then fill
-   missing human/runtime proofs (including Fish and Wayland where applicable).
+   missing human/runtime proofs (including Wayland where applicable).
 3. Complete J6/J7/J9 staging, composite restore, private-copy, and interruption
    coverage. Review plugin cancellation and Git execution/configuration boundaries.
 4. Re-run the required journeys at one accepted source SHA, then finish preview

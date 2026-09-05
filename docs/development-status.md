@@ -1289,3 +1289,21 @@ passed. The preceding `d3ae314` completed hosted CI successfully:
 https://github.com/agensfield/fulla/actions/runs/33996455364.
 J3 remains partial for specialized surfaces and exhaustive input/authority/signal
 combinations. No live pa store, clipboard, or remote host was used in this journey.
+
+
+## Real Fish completion engine acceptance (2026-09-06)
+
+`TestFishCompletionBehavior` now runs Fish's actual `complete -C` engine with
+private HOME/config and no user configuration. Seven cases cover top-level and
+grouped command prefixes, a quoted store path plus JSON option, equals-form
+config, shell-name completion, incomplete store input, and Git/run passthrough
+boundaries. Linux CI installs Fish and explicitly requires this test, so absence
+cannot silently skip the gate. The existing syntax test also exercises Fish.
+
+All completion tests passed locally using the official Fish 4.9.2 macOS runtime
+extracted into ignored `dist/fish-runtime`, without host installation or shell
+configuration changes. No production correction was necessary. actionlint and
+diff checks passed. This closes the previously absent real Fish engine evidence,
+not exhaustive interactive-shell installation or every possible completion case.
+The test uses the documented interface:
+https://fishshell.com/docs/4.5/cmds/complete.html.

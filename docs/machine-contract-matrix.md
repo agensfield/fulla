@@ -48,7 +48,7 @@ workflow evidence; the full acceptance matrix retains remaining combinations.
 | `status` | Selected store/config | Summary succeeds | Config provenance and metadata tests |
 | `doctor` | Selected store; repair/recovery authority supplied separately | Structural report succeeds | Deep/plugin/permission/lock diagnostics and recovery tests |
 | `git` | Explicit child argv; native streams | JSON refuses | Git subprocess/locking tests |
-| `completion` | Bash/Zsh/Fish | JSON refuses | Completion syntax/behavior tests; real Fish remains open |
+| `completion` | Bash/Zsh/Fish | JSON refuses | Bash/Fish engine behavior and Bash/Zsh/Fish syntax tests |
 | `version` | None | Version envelope succeeds | Native packaged-binary acceptance |
 | `remote serve` | Protocol-owned streams; SSH access alone does not authorize operations | JSON refuses | Mutual remote session and real OpenSSH tests |
 

@@ -23,6 +23,14 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version-file: go.mod
+      - name: Fish runtime acceptance dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fish
+      - name: Required Fish completion behavior
+        if: runner.os == 'Linux'
+        env:
+          FULLA_REQUIRE_FISH: "1"
+        run: go test ./internal/cli -run 'TestFishCompletionBehavior|TestCompletionWithoutStoreAndShellSyntax' -v
       - name: Formatting
         run: test -z "$(gofmt -l .)"
       - name: Race and integration tests
