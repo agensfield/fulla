@@ -11,7 +11,10 @@ import (
 )
 
 func (s *Store) Git(args ...string) ([]byte, error) {
-	a := []string{"-C", s.PasswordDirectory(), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "core.fsmonitor=false"}
+	a := []string{"-C", s.PasswordDirectory(), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0"}
+	// Automatic maintenance can detach, then mutate Git objects after this
+	// command returns and outside Fulla's lock/staging lifetime. Internal Git
+	// operations must not spawn it; explicit expert Git remains user-controlled.
 	a = append(a, args...)
 	// Git stderr can contain hooks, filters, filenames, or configured commands.
 	// Caller diagnostics never forward arbitrary subprocess output.
