@@ -520,3 +520,25 @@ Commit also repeats the conversion check before staging, so resumed recovery
 fails closed if conversion rules changed during interruption. Local Go 1.26.0
 full race/vet and real shell-pa acceptance passed; focused conversion and killed
 rotation recovery tests passed after adding this final commit-time check.
+
+
+## Killed multi-entry transaction recovery
+
+`TestKilledTransactionRecoveryAndChangedGitFilter` kills a child during a
+two-entry delete/add transaction after either entry publication, Git commit, or
+receipt publication, with and without Git (eight cases). Recovery uses the public
+store recovery API and inspected stale-owner tokens. Fixtures assert live-owner
+refusal, ordinary-read refusal during interruption, exact destination bytes,
+source removal, clean Git state, and retained committed backup/receipt evidence.
+
+One case changes Git conversion rules after the transaction owner dies. A separate
+recovery process fails without executing the configured filter or changing Git
+HEAD, exits, and leaves recoverable ownership. Removing the fixture conversion
+rule and reinspecting the new owner token allows a subsequent recovery to finish.
+This proves retry after a failed recovery invocation, rather than only calling
+journal-finalization helpers directly. The targeted Go 1.26.0 race run and vet
+passed. These tests run in the standard hosted race suite.
+
+Coverage remains bounded to these publication seams. Pre-journal process death,
+power-loss durability, arbitrary syscall interruption, and all other workflow
+boundaries still require their own acceptance evidence.
