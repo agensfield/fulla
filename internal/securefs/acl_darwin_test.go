@@ -44,4 +44,19 @@ func TestNativeACLInspection(t *testing.T) {
 		t.Fatal("ACL-bearing repair accepted")
 	}
 
+	// POSIX mode bits alone look private; the ACL must still be detected.
+	if err := os.Chmod(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateTree(root); err == nil {
+		t.Fatal("ordinary validation accepted ACL")
+	}
+	if _, err := Read(root, filepath.Base(path), 1024); err == nil {
+		t.Fatal("private read accepted ACL")
+	}
+	present, err = hasACL(f)
+	if err != nil || !present {
+		t.Fatal("inspection changed ACL", err)
+	}
+
 }

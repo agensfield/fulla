@@ -58,16 +58,22 @@ func inspectModeFile(root *os.Root, name string, info fs.FileInfo) (*os.File, er
 		f.Close()
 		return nil, fmt.Errorf("path changed during mode inspection: %s", name)
 	}
-	acl, err := hasACL(f)
-	if err != nil {
+	if err := rejectACL(f, name); err != nil {
 		f.Close()
-		return nil, fmt.Errorf("cannot inspect ACL: %s: %w", name, err)
-	}
-	if acl {
-		f.Close()
-		return nil, fmt.Errorf("intentional ACL requires manual review: %s", name)
+		return nil, err
 	}
 	return f, nil
+}
+
+func rejectACL(f *os.File, name string) error {
+	acl, err := hasACL(f)
+	if err != nil {
+		return fmt.Errorf("cannot inspect ACL: %s: %w", name, err)
+	}
+	if acl {
+		return fmt.Errorf("ACL-bearing private path requires manual review: %s", name)
+	}
+	return nil
 }
 
 // ApplyModes must run under the shared store lock. Partial progress never widens

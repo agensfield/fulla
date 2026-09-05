@@ -265,8 +265,8 @@ ACL xattrs. Repair refuses all ACL-bearing objects, unknown ACL-inspection
 failures, foreign owners, special modes/types, symlinks, hard links, and directories
 writable by other users. These require explicit manual review; Fulla never
 rewrites their ACLs. Unreadable objects cannot be automatically repaired without
-first being inspectable. Ordinary commands continue to enforce private POSIX
-modes. Broader ACL policy for ordinary inspection remains an acceptance item.
+first being inspectable. Ordinary commands enforce private POSIX modes and reject ACL-bearing private
+paths rather than interpreting custom rules. ACLs remain untouched.
 
 Repair refuses another writer or a pending transaction. For a killed permission
 repair owner, inspect with `doctor`, then explicitly use
@@ -287,3 +287,18 @@ The earlier macOS initialization failure at `d2f5752` remains unexplained.
 both hosted jobs passed (run 33983151661). Local runs of 20 repetitions with
 Go 1.26.0 and 100 with Go 1.27.1 also passed. This is reproduction evidence,
 not a demonstrated root-cause fix.
+
+
+## Ordinary private-path ACL boundary
+
+Normal rooted opening, whole-store validation, and bounded private reads now
+inspect ACLs through the same native descriptor APIs. A private-looking `0600`
+mode alone is insufficient: an ACL-bearing object is rejected before reading
+its contents, even when its current ACL is restrictive. Fulla does not attempt
+to normalize or evaluate arbitrary custom ACL policy. Fixture tests explicitly
+retain ACLs alongside `0600` modes, then verify refusal and ACL preservation.
+
+Hosted permission-repair acceptance at `895f0e9` passed on Linux and macOS:
+https://github.com/agensfield/fulla/actions/runs/33983935870. This includes native
+ACL fixtures, killed-owner recovery, full race/static gates, terminal and real
+clipboard acceptance, repeated initialization journeys, and cross-builds.

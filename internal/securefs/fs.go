@@ -110,6 +110,17 @@ func open(name string, repair bool) (*os.Root, error) {
 		root.Close()
 		return nil, fmt.Errorf("directory changed while opening: %s", name)
 	}
+	if !repair {
+		f, err := inspectModeFile(root, ".", opened)
+		if err != nil {
+			root.Close()
+			return nil, err
+		}
+		if err := f.Close(); err != nil {
+			root.Close()
+			return nil, err
+		}
+	}
 	if err := localFilesystem(root); err != nil {
 		root.Close()
 		return nil, err
@@ -126,7 +137,14 @@ func ValidateTree(root *os.Root) error {
 		if err != nil {
 			return err
 		}
-		return ValidateInfo(name, info, true)
+		if err := ValidateInfo(name, info, true); err != nil {
+			return err
+		}
+		f, err := inspectModeFile(root, name, info)
+		if err != nil {
+			return err
+		}
+		return f.Close()
 	})
 }
 
@@ -151,6 +169,12 @@ func Read(root *os.Root, name string, limit int64) ([]byte, error) {
 	opened, err := f.Stat()
 	if err != nil || !os.SameFile(info, opened) {
 		return nil, fmt.Errorf("file changed while opening: %s", name)
+	}
+	if err := ValidateInfo(name, opened, true); err != nil {
+		return nil, err
+	}
+	if err := rejectACL(f, name); err != nil {
+		return nil, err
 	}
 	data, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
