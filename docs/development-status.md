@@ -733,3 +733,33 @@ workaround or timeout-completion claim has been added.
 The final PTY run also passed full-archive passphrase export/restore with exact
 bytes and original identity preserved. Local full Go race suite, final CLI race
 tests, vet, Ruff, and basedpyright passed.
+
+
+## One-direction sync commit, lost acknowledgement, and retry
+
+The locked sync contract requires exact partial-state reporting and retained
+receipts. Sync previously returned status 3 with observed state but exited before
+writing its sync receipt. It now attempts a private, locked receipt for partial
+outcomes. The receipt records outcome=partial and the same push/pull/activation
+and remote-uncertainty fields returned to the caller. Receipt lock/publication
+failure preserves status 3 and reports sync.receipt_failed in receipt_error.
+Receipt paths are returned only after publication succeeds, rather than being
+advertised before acquiring the receipt lock. Completed receipts carry
+outcome=completed; existing fields and version remain unchanged.
+
+Production client/server tests for both current and immediately previous wire
+versions drop either the import acknowledgement after the remote transaction
+commits, or the export reply after acknowledged push. They prove status 3,
+correct remote uncertainty, no local pull publication, released locks, persisted
+partial evidence, safe retry without re-encrypting the previously committed
+remote entry, exact binary/empty bytes, and divergent shared-name preservation.
+A contention fixture holds a real local store lock at the lost-acknowledgement
+boundary and proves receipt failure does not obscure the remote commit.
+
+These are in-process transport-disconnect fixtures using the production RPC
+and real stores, not a new physical two-host or power-loss claim. The existing
+manual Mac/devbox drill remains separate. Restart during receipt publication,
+further adversarial protocol cases, and full acceptance remain open.
+
+The full local Go 1.26.0 race suite and vet passed, including all five new
+partial-commit/receipt cases.

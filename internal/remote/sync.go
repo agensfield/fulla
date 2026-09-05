@@ -3,6 +3,7 @@ package remote
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
@@ -57,6 +58,18 @@ func Plan(local, remote []string) (push, pull, shared []string) {
 
 func Sync(local *store.Store, peer store.Peer, client *Client, dryRun, strict bool) (result SyncResult, err error) {
 	result = SyncResult{Peer: peer.Name, DryRun: dryRun, Push: []string{}, Pull: []string{}, Skipped: []string{}}
+	receiptAttempted := false
+	defer func() {
+		var problem *fault.Error
+		if receiptAttempted || !errors.As(err, &problem) || problem.Code != "sync.partial" {
+			return
+		}
+		if receiptErr := syncReceipt(local, &result, "partial"); receiptErr != nil {
+			problem.Details["receipt_error"] = "sync.receipt_failed"
+		}
+		problem.Details["state"] = result
+	}()
+
 	if err := local.RequireDomain("sync"); err != nil {
 		return result, err
 	}
@@ -135,16 +148,8 @@ func Sync(local *store.Store, peer store.Peer, client *Client, dryRun, strict bo
 	if err := client.Close(); err != nil {
 		return result, partial(result, "sync steps completed but SSH finalization failed")
 	}
-	id := securefs.ID()
-	result.Receipt = ".fulla/receipts/" + id + ".json"
-	data, _ := json.Marshal(map[string]any{"version": 1, "command": "sync", "result": result, "at": time.Now().UTC().Format(time.RFC3339Nano), "pa_xfer_retired": result.Activated})
-	lock, err := local.Lock("sync receipt")
-	if err != nil {
-		return result, partial(result, "sync completed but receipt lock failed")
-	}
-	err = securefs.PublishNew(local.Root, result.Receipt, data)
-	releaseErr := lock.Release()
-	if err != nil || releaseErr != nil {
+	receiptAttempted = true
+	if err := syncReceipt(local, &result, "completed"); err != nil {
 		return result, partial(result, "sync completed but receipt finalization failed")
 	}
 	if strict && len(result.Skipped) > 0 {
@@ -154,6 +159,32 @@ func Sync(local *store.Store, peer store.Peer, client *Client, dryRun, strict bo
 		return result, e
 	}
 	return result, nil
+}
+
+// A partial receipt records observed state, including uncertain remote commits.
+// Failure to persist it must never hide the original partial outcome.
+func syncReceipt(local *store.Store, result *SyncResult, outcome string) error {
+	id := securefs.ID()
+	receipt := ".fulla/receipts/" + id + ".json"
+	recorded := *result
+	recorded.Receipt = receipt
+	data, err := json.Marshal(map[string]any{"version": 1, "command": "sync", "outcome": outcome, "result": recorded, "at": time.Now().UTC().Format(time.RFC3339Nano), "pa_xfer_retired": result.Activated})
+	if err != nil {
+		return err
+	}
+	lock, err := local.Lock("sync receipt")
+	if err != nil {
+		return err
+	}
+	err = securefs.PublishNew(local.Root, receipt, data)
+	if err == nil {
+		result.Receipt = receipt
+	}
+	releaseErr := lock.Release()
+	if err != nil {
+		return err
+	}
+	return releaseErr
 }
 
 func partial(result SyncResult, message string) *fault.Error {
