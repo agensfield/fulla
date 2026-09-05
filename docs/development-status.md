@@ -128,3 +128,33 @@ https://github.com/agensfield/fulla/actions/runs/33979798139. Both Linux and
 macOS passed the full race suite, static analysis, controlling-terminal
 acceptance, and four-platform builds. The Python acceptance harness also
 passes Ruff and basedpyright without warnings.
+
+## Clipboard checkpoint
+
+`copy NAME` (`clip`) writes UTF-8 text without NUL and verifies the clipboard's
+exact byte digest before reporting success. Native macOS pbcopy/pbpaste,
+Wayland wl-copy/wl-paste, and X11 xclip are optional system integrations. Fulla
+rejects macOS RTF/PostScript header inputs before pbcopy can reinterpret them;
+`show` remains the exact-byte surface for those values and arbitrary binary data.
+
+The default 45-second expiry uses a fresh detached Fulla process. Its private
+stdin request contains only the digest, deadline, and backend command paths.
+The worker does not open a store or inherit decrypted memory, and subprocess
+environments contain only desktop/locale variables. Clipboard data at expiry
+is streamed into a digest; a different digest prevents clearing. Config
+`clipboard.clear_after`, `--clear-after`, and `--no-clear` control expiry.
+Scheduling is not a guarantee against logout, worker termination, or desktop
+failure. Clipboard managers remain outside Fulla's control.
+
+The platform tools expose inspection and clearing as separate operations, not
+an atomic compare-and-swap. A concurrent replacement in that narrow interval
+can race; this remains a limitation to reconcile in the final security audit.
+The implementation does not claim atomic clipboard ownership.
+
+Fixtures verify exact UTF-8/newlines, rejection before mutation, post-write
+failure status 3, secret-free envelopes/diagnostics, filtered child environments,
+worker completion, and preservation of replacement values. The CLI harness is
+`scripts/acceptance-clipboard.py`; it defaults to fixture utilities. Its explicit
+real-clipboard mode is restricted to disposable GitHub runners. CI now includes
+an isolated X11 display and the macOS runner's real pasteboard in addition to
+fixture tests. Local tests never accessed the user's clipboard.

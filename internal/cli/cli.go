@@ -121,14 +121,28 @@ func (a *App) failure(command string, jsonMode bool, err error) int {
 	}
 	return e.Status
 }
+
+type commandResult struct {
+	data     any
+	warnings []any
+}
+
 func (a *App) success(command string, data any, jsonMode bool) int {
+	warnings := []any{}
+	if result, ok := data.(commandResult); ok {
+		data = result.data
+		warnings = result.warnings
+	}
 	if jsonMode {
 		// Success warnings are always present, including an empty array.
-		err := json.NewEncoder(a.Out).Encode(map[string]any{"schema": "fulla.cli/v1", "ok": true, "command": command, "data": data, "warnings": []any{}})
+		err := json.NewEncoder(a.Out).Encode(map[string]any{"schema": "fulla.cli/v1", "ok": true, "command": command, "data": data, "warnings": warnings})
 		if err != nil {
 			return 3
 		}
 		return 0
+	}
+	for _, warning := range warnings {
+		fmt.Fprintln(a.Err, warning)
 	}
 	if err := json.NewEncoder(a.Out).Encode(data); err != nil {
 		return 3
@@ -141,6 +155,10 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, fault.Usage("unexpected passthrough arguments")
 	}
 	switch p.Command {
+	case "copy":
+		if err := p.allow("clear-after", "no-clear"); err != nil {
+			return nil, false, err
+		}
 	case "completion":
 		return nil, true, a.completion(p)
 	case "git":
@@ -292,6 +310,10 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	if err := s.Unlocked(); err != nil {
 		return nil, false, err
 	}
+	if p.Command == "copy" {
+		r, e := a.copy(p, c, s)
+		return r, false, e
+	}
 	if p.Command == "git" {
 		return nil, true, a.git(p, s)
 	}
@@ -412,6 +434,7 @@ const help = `Fulla: a local-first secret custodian (development build)
   fulla add NAME                    Choose generation, hidden input, or editor
   fulla add NAME --stdin            Add exact bytes from standard input
   fulla show NAME                   Write exact decrypted bytes
+  fulla copy NAME                   Copy text with conditional 45-second expiry
   fulla edit NAME                   Edit with the trusted configured editor
   fulla edit NAME --stdin           Replace an existing entry
   fulla list                       List entry names

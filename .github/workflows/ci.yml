@@ -33,6 +33,16 @@ jobs:
         run: |
           go build -o dist/fulla .
           python3 scripts/acceptance-interactive.py dist/fulla
+          python3 scripts/acceptance-clipboard.py dist/fulla
+      - name: Isolated X11 clipboard dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth
+      - name: Real clipboard acceptance (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python3 scripts/acceptance-clipboard.py dist/fulla --real-clipboard
+      - name: Real clipboard acceptance (macOS)
+        if: runner.os == 'macOS'
+        run: python3 scripts/acceptance-clipboard.py dist/fulla --real-clipboard
       - name: Four-platform builds
         shell: bash
         run: |
