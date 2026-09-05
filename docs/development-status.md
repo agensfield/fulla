@@ -80,3 +80,17 @@ Original design thread consulted: `019fba52-6d8f-70e0-94bc-bc4e3e72d400`.
 The original session confirmed that remaining mechanics are implementation
 choices, not reasons to reopen locked product decisions. The user reaffirmed
 Fulla's canonical name on 2026-09-05 and left for a swim with the goal active.
+
+## Expert and shell surfaces
+
+`fulla git -- ...` runs system Git in the encrypted repository while holding the
+shared store lock. Its stdin, stdout, stderr, and child exit status pass through;
+`--json` is rejected. Explicit Git aliases/configuration remain trusted expert
+code. Regression coverage observes the held lock from the real Git child and
+checks that child failure releases it without adding Fulla output.
+
+`fulla completion bash|zsh|fish` generates command/group and global-option
+completion without opening a store. Source the generated script in the chosen
+shell (for example, `source <(fulla completion bash)`). Generation rejects JSON.
+Bash behavior and Bash/Zsh syntax were checked locally; Fish is unavailable on
+this host and its syntax/runtime acceptance remains outstanding.

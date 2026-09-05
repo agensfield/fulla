@@ -141,6 +141,8 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		return nil, false, fault.Usage("unexpected passthrough arguments")
 	}
 	switch p.Command {
+	case "completion":
+		return nil, true, a.completion(p)
 	case "git":
 		if err := p.allow(); err != nil {
 			return nil, false, err
