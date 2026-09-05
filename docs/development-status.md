@@ -164,3 +164,29 @@ https://github.com/agensfield/fulla/actions/runs/33980733730. The real X11 and
 macOS clipboard jobs passed, alongside fixture/terminal acceptance, race tests,
 static analysis, and four-platform builds. Wayland currently has fixture and
 upstream-interface coverage; real compositor acceptance is still outstanding.
+
+## Backup retention checkpoint
+
+`backup prune --keep N` and/or `--older-than DURATION` select retained snapshots
+explicitly. Invocation previews by default; `--yes` applies the selection, and
+`--dry-run` always previews. Combined criteria intersect: a snapshot must be
+outside the newest N and older than the selected duration. `--keep 0` explicitly
+selects all snapshots unless an age criterion narrows it. No criteria is an
+invalid invocation, and there is no background expiry. Example: preview with
+`fulla backup prune --keep 10 --older-than 720h --json`, then apply the same
+criteria with `--yes`.
+
+Pruning journals the complete selected backup IDs outside the snapshots before
+unlinking anything. The shared lock remains held through deletion and receipt
+publication. `doctor --recover-lock TOKEN` resumes a dead owner's pruning,
+including a snapshot whose own journal was already unlinked. A conflicting
+combination of pending operation journals fails closed. Receipts remain after
+pruning; live entries, Git history, identities, and peer pins are unchanged.
+
+Tests compare the complete fixture tree before/after preview, preserve exact
+live entry bytes, verify count/age intersection, and kill actual subprocesses
+at preparation, deletion, and receipt boundaries. A partial-snapshot fixture
+covers recovery after loss of the deleted snapshot's own journal. Backup sorting
+now compares parsed instants, including differing fractional-second precision.
+`status` reports retained backup count, total bytes, oldest/newest timestamps,
+and oldest age in seconds.

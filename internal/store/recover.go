@@ -102,6 +102,17 @@ func (s *Store) Recover(expected string) (map[string]any, error) {
 	if err := s.Validate(); err != nil {
 		return nil, err
 	}
+	count := 0
+	for _, name := range []string{"pending.json", "rotation.json", "prune.json"} {
+		if _, err := s.Root.Lstat(metadata + "/" + name); err == nil {
+			count++
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+	if count > 1 {
+		return nil, fault.New("transaction.conflict", "multiple pending journals require inspection")
+	}
 	// Publish this invocation as owner before touching the journal. flock is
 	// released by the kernel on process death, so interrupted recovery retries.
 	newInfo := fmt.Sprintf("pid=%d host=%s operation=recover started=%s\n", os.Getpid(), info.Host, time.Now().UTC().Format(time.RFC3339))
@@ -113,6 +124,27 @@ func (s *Store) Recover(expected string) (map[string]any, error) {
 		return nil, err
 	}
 	expected = newToken
+	pruneData, pruneErr := securefs.Read(s.Root, metadata+"/prune.json", maxMetadata)
+	if pruneErr == nil {
+		var j pruneJournal
+		if err := StrictJSON(pruneData, &j); err != nil {
+			return nil, err
+		}
+		if err := s.finishPrune(&j, nil); err != nil {
+			return nil, fault.Applied("backup prune recovery incomplete; lock retained", j.ID)
+		}
+		if err := s.Root.Remove("lock/recovery"); err != nil {
+			return nil, err
+		}
+		l := &Lock{store: s, Token: expected, held: true}
+		if err := l.Release(); err != nil {
+			return nil, fault.Applied("prune recovered but lock release failed", j.ID)
+		}
+		return map[string]any{"recovered": true, "transaction": j.ID, "lock_released": true}, nil
+	}
+	if !errors.Is(pruneErr, fs.ErrNotExist) {
+		return nil, pruneErr
+	}
 	data, err := securefs.Read(s.Root, metadata+"/pending.json", maxMetadata)
 	if errors.Is(err, fs.ErrNotExist) {
 		rotationData, rotationErr := securefs.Read(s.Root, metadata+"/rotation.json", maxMetadata)

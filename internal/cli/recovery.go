@@ -3,6 +3,8 @@ package cli
 import (
 	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/store"
+	"strconv"
+	"time"
 )
 
 func (a *App) recovery(p invocation, s *store.Store) (any, error) {
@@ -30,6 +32,26 @@ func (a *App) recovery(p invocation, s *store.Store) (any, error) {
 			return nil, fault.Interaction("history restore requires --yes to restore the selected entry")
 		}
 		return s.HistoryRestore(p.Args[0], p.Args[1])
+	case "backup prune":
+		if len(p.Args) != 0 {
+			return nil, fault.Usage("backup prune takes no positional arguments")
+		}
+		retention := store.Retention{}
+		if p.has("keep") {
+			n, e := strconv.Atoi(p.value("keep"))
+			if e != nil || n < 0 {
+				return nil, fault.Usage("keep must be a nonnegative integer")
+			}
+			retention.Keep = &n
+		}
+		if p.has("older-than") {
+			d, e := time.ParseDuration(p.value("older-than"))
+			if e != nil || d <= 0 {
+				return nil, fault.Usage("older-than must be a positive duration such as 720h")
+			}
+			retention.OlderThan = d
+		}
+		return s.Prune(retention, p.has("dry-run") || !p.has("yes"))
 	case "backup list":
 		if len(p.Args) != 0 {
 			return nil, fault.Usage("backup list takes no positional arguments")

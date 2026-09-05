@@ -101,3 +101,53 @@ func TestParserPreservesPassthroughAndAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupPruneCLIPreviewsBeforeExplicitApplication(t *testing.T) {
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "store")
+	invoke := func(args ...string) (int, map[string]any) {
+		var out bytes.Buffer
+		a := App{In: bytes.NewReader([]byte("fixture")), Out: &out, Getenv: func(k string) string {
+			if k == "HOME" {
+				return home
+			}
+			return ""
+		}}
+		code := a.Main(append([]string{"--store", dir, "--json"}, args...))
+		var result map[string]any
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return code, result
+	}
+	if code, _ := invoke("init", "--yes"); code != 0 {
+		t.Fatal(code)
+	}
+	for _, name := range []string{"a", "b", "c"} {
+		if code, _ := invoke("add", name, "--stdin"); code != 0 {
+			t.Fatal(code)
+		}
+	}
+	if code, _ := invoke("backup", "prune", "--yes"); code != 2 {
+		t.Fatal("accepted implicit retention", code)
+	}
+	code, preview := invoke("backup", "prune", "--keep", "1")
+	if code != 0 || preview["data"].(map[string]any)["dry_run"] != true {
+		t.Fatal("missing preview", code, preview)
+	}
+	code, backups := invoke("backup", "list")
+	if code != 0 || len(backups["data"].(map[string]any)["backups"].([]any)) != 3 {
+		t.Fatal("preview removed backups", code)
+	}
+	code, result := invoke("backup", "prune", "--keep", "1", "--yes")
+	if code != 0 || len(result["data"].(map[string]any)["deleted"].([]any)) != 2 {
+		t.Fatal("prune not applied", code, result)
+	}
+	code, backups = invoke("backup", "list")
+	if code != 0 || len(backups["data"].(map[string]any)["backups"].([]any)) != 1 {
+		t.Fatal("wrong retained set", code)
+	}
+}

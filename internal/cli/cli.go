@@ -118,6 +118,7 @@ func (a *App) failure(command string, jsonMode bool, err error) int {
 		_ = json.NewEncoder(a.Out).Encode(envelope{Schema: "fulla.cli/v1", OK: false, Command: command, Error: e})
 	} else {
 		fmt.Fprintln(a.Err, e.Error())
+
 	}
 	return e.Status
 }
@@ -214,6 +215,10 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if err := p.allow(); err != nil {
 			return nil, false, err
 		}
+	case "backup prune":
+		if err := p.allow("keep", "older-than", "dry-run"); err != nil {
+			return nil, false, err
+		}
 	case "backup restore":
 		if err := p.allow("phase", "full", "identity", "passphrase-fd"); err != nil {
 			return nil, false, err
@@ -305,6 +310,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return r, false, e
 		}
 		r, e := s.Doctor(p.has("deep"))
+
 		return r, false, e
 	}
 	if err := s.Unlocked(); err != nil {
@@ -356,7 +362,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		r, e := a.transfer(p, s)
 		return r, p.Command == "transfer export" && p.value("output") == "-", e
 	}
-	if p.Command == "history list" || p.Command == "history show" || p.Command == "history restore" || p.Command == "backup list" || p.Command == "backup show" || p.Command == "backup restore" {
+	if p.Command == "history list" || p.Command == "history show" || p.Command == "history restore" || p.Command == "backup list" || p.Command == "backup show" || p.Command == "backup restore" || p.Command == "backup prune" {
 		r, e := a.recovery(p, s)
 		return r, false, e
 	}
@@ -375,7 +381,11 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if p.Command == "list" {
 			return map[string]any{"names": names}, false, nil
 		}
-		return map[string]any{"store_path": c.StorePath, "config_path": c.ConfigPath, "sources": c.Sources, "profile": "pa-v1", "entries": len(names)}, false, nil
+		backups, err := s.BackupSummary()
+		if err != nil {
+			return nil, false, err
+		}
+		return map[string]any{"backups": backups, "store_path": c.StorePath, "config_path": c.ConfigPath, "sources": c.Sources, "profile": "pa-v1", "entries": len(names)}, false, nil
 	case "show":
 		if len(p.Args) != 1 {
 			return nil, false, fault.Usage("show requires one entry name")

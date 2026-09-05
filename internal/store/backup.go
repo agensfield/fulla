@@ -5,6 +5,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/agensfield/fulla/internal/crypt"
 	"github.com/agensfield/fulla/internal/fault"
@@ -43,6 +44,9 @@ func (s *Store) Backups() ([]Backup, error) {
 		if err != nil {
 			return nil, err
 		}
+		if _, err := time.Parse(time.RFC3339Nano, j.Started); err != nil {
+			return nil, fault.New("backup.invalid", "backup timestamp is invalid")
+		}
 		b := Backup{ID: j.ID, Started: j.Started, Command: j.Command}
 		err = fs.WalkDir(root.FS(), entry.Name(), func(name string, e fs.DirEntry, err error) error {
 			if err != nil {
@@ -62,7 +66,14 @@ func (s *Store) Backups() ([]Backup, error) {
 		}
 		backups = append(backups, b)
 	}
-	sort.Slice(backups, func(i, j int) bool { return backups[i].Started > backups[j].Started })
+	sort.Slice(backups, func(i, j int) bool {
+		a, _ := time.Parse(time.RFC3339Nano, backups[i].Started)
+		b, _ := time.Parse(time.RFC3339Nano, backups[j].Started)
+		if a.Equal(b) {
+			return backups[i].ID > backups[j].ID
+		}
+		return a.After(b)
+	})
 	return backups, nil
 }
 
@@ -164,4 +175,31 @@ func (s *Store) BackupRestore(id, phase string) (MutationResult, error) {
 	}
 	owned = false
 	return s.mutate(lock, "backup restore", values, nil)
+}
+
+type BackupSummary struct {
+	Count            int     `json:"count"`
+	Bytes            int64   `json:"bytes"`
+	Oldest           string  `json:"oldest,omitempty"`
+	Newest           string  `json:"newest,omitempty"`
+	OldestAgeSeconds float64 `json:"oldest_age_seconds"`
+}
+
+func (s *Store) BackupSummary() (BackupSummary, error) {
+	result := BackupSummary{}
+	backups, err := s.Backups()
+	if err != nil {
+		return result, err
+	}
+	result.Count = len(backups)
+	for _, backup := range backups {
+		result.Bytes += backup.Bytes
+	}
+	if len(backups) > 0 {
+		result.Newest = backups[0].Started
+		result.Oldest = backups[len(backups)-1].Started
+		started, _ := time.Parse(time.RFC3339Nano, result.Oldest)
+		result.OldestAgeSeconds = time.Since(started).Seconds()
+	}
+	return result, nil
 }
