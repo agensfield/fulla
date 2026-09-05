@@ -28,7 +28,10 @@ func TestMain(m *testing.M) {
 				os.Exit(72)
 			}
 		} else if operation == "read" {
-			if os.WriteFile(file+".reader", []byte(strconv.Itoa(os.Getppid())), 0600) != nil {
+			// The parent polls .reader concurrently. Publish the complete PID
+			// by rename; WriteFile exposes an empty file before its write.
+			if os.WriteFile(file+".reader.pending", []byte(strconv.Itoa(os.Getppid())), 0600) != nil ||
+				os.Rename(file+".reader.pending", file+".reader") != nil {
 				os.Exit(73)
 			}
 			value, err := os.ReadFile(file)

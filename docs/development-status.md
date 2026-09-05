@@ -1307,3 +1307,25 @@ diff checks passed. This closes the previously absent real Fish engine evidence,
 not exhaustive interactive-shell installation or every possible completion case.
 The test uses the documented interface:
 https://fishshell.com/docs/4.5/cmds/complete.html.
+
+
+## Clipboard fixture receipt publication race (2026-09-06)
+
+Linux CI at `e83a6e6` passed all seven required Fish behavior cases, then failed
+`TestExpiryWorkerFreshProcessAndDigestOnly/false` with
+`strconv.Atoi: parsing "": invalid syntax`. Job 101390498853 in run 33997512300
+contains the exact error. The fixture used `os.WriteFile` on the final PID receipt
+while the parent concurrently polled that path. Creation is visible before the
+write, so the parent could read an empty receipt. A controlled create-before-write
+probe reproduced that observation directly.
+
+The fixture now writes a private pending receipt and renames it into place after
+the write completes. PID parsing remains strict; the test still requires a fresh
+process, its exit, exact clearing of the original clipboard, preservation of a
+replacement, and no plaintext in the expiry request. No production clipboard
+behavior changed. This is distinct from the previous Git maintenance CI failure.
+Agent-journey commit `c93ed51` completed both hosted platforms successfully.
+
+The corrected expiry test passed 20 repetitions under the race detector locally
+(106.6 seconds). macOS CI at `e83a6e6` passed; the Linux failure was the receipt
+publication race described above.
