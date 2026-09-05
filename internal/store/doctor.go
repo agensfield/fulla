@@ -5,17 +5,25 @@ import (
 	"errors"
 
 	"filippo.io/age"
+	"github.com/agensfield/fulla/internal/crypt"
+	"github.com/agensfield/fulla/internal/securefs"
 )
 
 type DoctorResult struct {
-	Healthy bool           `json:"healthy"`
-	Deep    bool           `json:"deep"`
-	Entries int            `json:"entries"`
-	Git     bool           `json:"git"`
-	Lock    *LockInfo      `json:"lock"`
-	Issues  []string       `json:"issues"`
-	Backups *BackupSummary `json:"backups"`
-	Peers   int            `json:"peers"`
+	IdentityValid   bool                 `json:"identity_valid"`
+	RecipientsValid bool                 `json:"recipients_valid"`
+	Plugins         []crypt.PluginStatus `json:"plugins"`
+	StorePath       string               `json:"store_path"`
+	ConfigPath      string               `json:"config_path"`
+	Sources         map[string]string    `json:"sources"`
+	Healthy         bool                 `json:"healthy"`
+	Deep            bool                 `json:"deep"`
+	Entries         int                  `json:"entries"`
+	Git             bool                 `json:"git"`
+	Lock            *LockInfo            `json:"lock"`
+	Issues          []string             `json:"issues"`
+	Backups         *BackupSummary       `json:"backups"`
+	Peers           int                  `json:"peers"`
 }
 
 // structuralIdentity never attempts key unwrapping. It permits the public age
@@ -68,6 +76,33 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 		r.Issues = append(r.Issues, "peer.invalid")
 	} else {
 		r.Peers = len(peers)
+	}
+	private, err := securefs.Read(s.Root, "identities", maxMetadata)
+	if err != nil {
+		return r, err
+	}
+	public, err := securefs.Read(s.Root, "recipients", maxMetadata)
+	if err != nil {
+		return r, err
+	}
+	ids, err := crypt.Identities(private, nil)
+	r.IdentityValid = err == nil
+	if err != nil {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "identity.invalid")
+	}
+	rs, err := crypt.Recipients(public, nil)
+	r.RecipientsValid = err == nil
+	if err != nil {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "recipients.invalid")
+	}
+	r.Plugins = crypt.Plugins(ids, rs)
+	for _, p := range r.Plugins {
+		if p.Issue != "" {
+			r.Healthy = false
+			r.Issues = append(r.Issues, p.Issue+":"+p.Name)
+		}
 	}
 	// The official parser receives an inert identity. It parses the age header
 	// without unwrapping a file key or decrypting content; no plugins run.

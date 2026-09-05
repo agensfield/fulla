@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"strings"
 
@@ -101,9 +102,15 @@ func Identities(data []byte, ui *plugin.ClientUI) ([]age.Identity, error) {
 }
 
 func Encrypt(value []byte, recipients []age.Recipient) ([]byte, error) {
+	if err := rejectPluginDebug(nil, recipients); err != nil {
+		return nil, err
+	}
 	var output bytes.Buffer
 	w, err := age.Encrypt(&output, recipients...)
 	if err != nil {
+		if failure := pluginFailure(err); failure != nil {
+			return nil, failure
+		}
 		return nil, fault.New("crypto.encrypt_failed", "could not wrap encrypted file key")
 	}
 	if _, err = w.Write(value); err != nil {
@@ -116,8 +123,14 @@ func Encrypt(value []byte, recipients []age.Recipient) ([]byte, error) {
 }
 
 func Decrypt(ciphertext []byte, identities []age.Identity) ([]byte, error) {
+	if err := rejectPluginDebug(identities, nil); err != nil {
+		return nil, err
+	}
 	r, err := age.Decrypt(bytes.NewReader(ciphertext), identities...)
 	if err != nil {
+		if failure := pluginFailure(err); failure != nil {
+			return nil, failure
+		}
 		return nil, fault.New("crypto.decrypt_failed", "could not decrypt with the selected identity")
 	}
 	value, err := io.ReadAll(io.LimitReader(r, MaxEntryBytes+1))
@@ -138,6 +151,10 @@ func VerifyRecipient(recipients []age.Recipient, identities []age.Identity) erro
 		return err
 	}
 	p, err := Decrypt(c, identities)
+	var problem *fault.Error
+	if errors.As(err, &problem) && strings.HasPrefix(problem.Code, "plugin.") {
+		return err
+	}
 	if err != nil || string(p) != marker {
 		return fault.New("identity.mismatch", "identity cannot decrypt the configured recipient")
 	}

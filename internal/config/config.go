@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/agensfield/fulla/internal/fault"
@@ -51,6 +52,12 @@ func Resolve(flags Flags, getenv func(string) string) (*Resolved, error) {
 	}
 	c.ConfigPath = filepath.Join(base, "fulla", "config.toml")
 	c.Sources["config"] = "default"
+	if getenv("XDG_CONFIG_HOME") != "" {
+		c.Sources["config"] = "XDG_CONFIG_HOME"
+	}
+	for _, key := range []string{"editor", "generation.length", "generation.alphabet", "clipboard.clear_after", "run.inherit"} {
+		c.Sources[key] = "default"
+	}
 	if p := getenv("FULLA_CONFIG"); p != "" {
 		c.ConfigPath = p
 		c.Sources["config"] = "FULLA_CONFIG"
@@ -101,7 +108,16 @@ func Resolve(flags Flags, getenv func(string) string) (*Resolved, error) {
 			}
 			return nil, e
 		}
-	} else if !errors.Is(err, fs.ErrNotExist) || c.Sources["config"] != "default" {
+		var declared map[string]any
+		if err := toml.Unmarshal(data, &declared); err != nil {
+			return nil, fault.New("config.invalid", "cannot inspect configuration settings")
+		}
+		for _, key := range []string{"editor", "generation.length", "generation.alphabet", "clipboard.clear_after", "run.inherit"} {
+			if declaredSetting(declared, key) {
+				c.Sources[key] = "config"
+			}
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) || c.Sources["config"] == "flag" || c.Sources["config"] == "FULLA_CONFIG" {
 		return nil, fault.New("config.unreadable", "selected configuration file is missing or unreadable")
 	}
 	if c.Generation.Length < 1 || c.Generation.Length > 65536 {
@@ -130,12 +146,24 @@ func Resolve(flags Flags, getenv func(string) string) (*Resolved, error) {
 			return nil, invalid("editor", "nonempty executable and argument strings")
 		}
 	}
+	if len(c.Editor) == 0 {
+		c.Sources["editor"] = "default"
+		if getenv("EDITOR") != "" {
+			c.Sources["editor"] = "EDITOR"
+		}
+		if getenv("VISUAL") != "" {
+			c.Sources["editor"] = "VISUAL"
+		}
+	}
 	dataHome := getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		dataHome = filepath.Join(home, ".local", "share")
 	}
 	c.StorePath = filepath.Join(dataHome, "fulla")
 	c.Sources["store"] = "default"
+	if getenv("XDG_DATA_HOME") != "" {
+		c.Sources["store"] = "XDG_DATA_HOME"
+	}
 	for _, candidate := range []struct{ value, source string }{{getenv("PA_DIR"), "PA_DIR"}, {c.Store, "config"}, {getenv("FULLA_DIR"), "FULLA_DIR"}, {flags.Store, "flag"}} {
 		if candidate.value != "" {
 			c.StorePath = candidate.value
@@ -176,4 +204,22 @@ func EnvName(name string) bool {
 		return false
 	}
 	return true
+}
+
+func declaredSetting(values map[string]any, key string) bool {
+	parts := strings.Split(key, ".")
+	for index, part := range parts {
+		value, ok := values[part]
+		if !ok {
+			return false
+		}
+		if index == len(parts)-1 {
+			return true
+		}
+		values, ok = value.(map[string]any)
+		if !ok {
+			return false
+		}
+	}
+	return false
 }

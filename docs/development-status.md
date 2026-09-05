@@ -62,9 +62,9 @@ Known review items to resolve before acceptance:
 - Git inspection uses GIT_OPTIONAL_LOCKS=0 after a test demonstrated that status
   could rewrite the index during adoption dry-run. Validate this with complete
   before/after store snapshots and shell-pa fixtures.
-- Plugin missing-executable and noninteractive interaction errors need precise
-  classification and mock-plugin tests. Encrypted SSH identity unlocking is
-  still pending.
+- Plugin missing-executable classification and inert inspection are implemented.
+  Noninteractive interaction errors, working mock-plugin round trips, and
+  encrypted SSH identity unlocking remain pending.
 - The 64 MiB entry limit is an explicit provisional implementation bound;
   document and test limits consistently across CRUD, bundles, and recovery.
 - Human formatting currently uses structured development output for control
@@ -195,10 +195,34 @@ Doctor now includes backup statistics and peer-registry validation in structural
 inspection. An unhealthy report returns status 1 with `doctor.unhealthy` and a
 structured report in JSON error details; human diagnostics show the issues and
 lock ownership evidence. Deep verification refuses pending operations even when
-an orphaned journal has no lock directory. Permission repair, plugin inspection,
-and explicit private diagnostic reports remain required follow-through.
+an orphaned journal has no lock directory. Permission repair and explicit private diagnostic reports remain required
+follow-through.
 
 Retention/doctor hosted receipt at `f5e7ddf`:
 https://github.com/agensfield/fulla/actions/runs/33981694235. Both Linux and
 macOS passed the full race suite (including killed-process pruning recovery),
 static analysis, terminal and real clipboard acceptance, and cross-builds.
+
+## Plugin diagnostics and configuration provenance
+
+Doctor parses identity/recipient configuration and checks plugin executable
+availability without executing plugins or decrypting entries. Results include
+selected store/config paths and setting provenance, including explicitly set
+default values and editor environment fallback. Missing plugin executables have
+typed errors that survive recipient-consistency checks.
+
+Fulla rejects plugin operations when `AGEDEBUG=plugin`: the upstream debug
+transport writes plugin protocol material, including keys, to stderr. Regression
+fixtures prove inspection and debug rejection never launch the executable and
+that diagnostics omit private identities and entry values. Native-only age
+operations remain available. The full local race suite and `go vet ./...`
+passed for this checkpoint; hosted verification follows the push.
+
+## Code review debt
+
+Repeated manual lock-release/error paths need a contract review for ownership
+and applied-state reporting. The central CLI dispatcher is approaching 500 lines;
+flag applicability, help, and typed output consistency need consolidation as the
+remaining surfaces land. Full before/after transaction snapshots also need
+scaling measurements. These are explicit review items, not claims that passing
+unit tests establishes security or release readiness.

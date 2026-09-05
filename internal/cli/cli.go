@@ -317,6 +317,9 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 			return r, false, e
 		}
 		r, e := s.Doctor(p.has("deep"))
+		r.StorePath = c.StorePath
+		r.ConfigPath = c.ConfigPath
+		r.Sources = c.Sources
 		if e == nil && !r.Healthy {
 			problem := fault.New("doctor.unhealthy", "store requires attention; inspect the diagnostic report")
 			problem.Details["report"] = r
