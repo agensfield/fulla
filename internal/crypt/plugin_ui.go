@@ -1,6 +1,7 @@
 package crypt
 
 import (
+	"errors"
 	"sync"
 
 	"filippo.io/age"
@@ -29,6 +30,20 @@ func pluginUI(source *plugin.ClientUI) (*plugin.ClientUI, *pluginInteraction) {
 	failed := func(err error) error {
 		if err != nil {
 			state.failure = fault.New("plugin.interaction_failed", "age plugin interaction did not complete")
+			var problem *fault.Error
+			if errors.As(err, &problem) {
+				switch problem.Code {
+				case "interaction.required":
+					state.failure = fault.Interaction("age plugin requires interactive input")
+				case "input.cancelled", "plugin.interaction_cancelled":
+					cancelled := fault.New("plugin.interaction_cancelled", "age plugin interaction cancelled")
+					switch problem.Status {
+					case 129, 130, 131, 143:
+						cancelled.Status = problem.Status
+					}
+					state.failure = cancelled
+				}
+			}
 		}
 		return err
 	}

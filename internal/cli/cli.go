@@ -294,7 +294,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		r, e := a.doctor(p, c)
 		return r, false, e
 	}
-	s, err := store.Open(c.StorePath, true, nil)
+	s, err := store.Open(c.StorePath, true, commandPluginUI(p))
 	if err != nil {
 		return nil, false, err
 	}

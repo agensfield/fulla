@@ -2,6 +2,7 @@ package crypt
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -19,11 +20,27 @@ func TestMain(m *testing.M) {
 	if filepath.Base(os.Args[0]) != "age-plugin-fullafixture" {
 		os.Exit(m.Run())
 	}
+	if len(os.Args) == 2 && os.Args[1] == "fixture-keys" {
+		id, err := age.GenerateX25519Identity()
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(map[string]string{
+			"identity":  plugin.EncodeIdentity("fullafixture", []byte(id.String())),
+			"recipient": plugin.EncodeRecipient("fullafixture", []byte(id.Recipient().String())),
+		}); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	p, err := plugin.New("fullafixture")
 	if err != nil {
 		os.Exit(1)
 	}
 	p.HandleRecipient(func(data []byte) (age.Recipient, error) {
+		if err := p.DisplayMessage("fixture message \x1b[31m"); err != nil {
+			return nil, err
+		}
 		if os.Getenv("FULLA_PLUGIN_FIXTURE_REQUEST") == "confirm" {
 			yes, err := p.Confirm("fixture confirmation sentinel", "allow", "deny")
 			if err != nil {

@@ -35,7 +35,9 @@ with tempfile.TemporaryDirectory(prefix="fulla-tty-") as temporary:
         ).stdout
 
     def terminal(
-        args: list[str], actions: list[tuple[bytes, bytes | int]], target: Path | None = None
+        args: list[str],
+        actions: list[tuple[bytes, bytes | int]],
+        target: Path | None = None,
     ) -> tuple[int, bytes]:
         pid, fd = pty.fork()
         if pid == 0:
@@ -198,13 +200,18 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     historical = b"synthetic-historical-secret\x00\xff"
     replacement = b"synthetic-current-secret"
     _ = cli("add", "restore-target", "--stdin", data=historical)
-    log = cast(dict[str, object], json.loads(cli("history", "list", "restore-target", "--json")))
+    log = cast(
+        dict[str, object],
+        json.loads(cli("history", "list", "restore-target", "--json")),
+    )
     log_data = cast(dict[str, object], log["data"])
     entries = cast(list[dict[str, str]], log_data["entries"])
     revision = entries[0]["commit"]
     _ = cli("edit", "restore-target", "--stdin", data=replacement)
     for flags in (["--json"], ["--non-interactive"]):
-        code, output = terminal(["history", "restore", revision, "restore-target", *flags], [])
+        code, output = terminal(
+            ["history", "restore", revision, "restore-target", *flags], []
+        )
         assert code == 1 and b"Continue?" not in output
         assert cli("show", "restore-target") == replacement
     code, output = terminal(
@@ -236,13 +243,20 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     assert cli("show", "restore-target") == historical
 
     snapshot_bytes = b"synthetic-snapshot-value\x00\xff"
-    snapshot_result = cast(dict[str, object], json.loads(cli("add", "snapshot-base", "--stdin", "--json", data=snapshot_bytes)))
+    snapshot_result = cast(
+        dict[str, object],
+        json.loads(
+            cli("add", "snapshot-base", "--stdin", "--json", data=snapshot_bytes)
+        ),
+    )
     snapshot_data = cast(dict[str, str], snapshot_result["data"])
     snapshot_id = snapshot_data["transaction"]
     _ = cli("edit", "snapshot-base", "--stdin", data=b"changed-snapshot-value")
     _ = cli("add", "snapshot-extra", "--stdin", data=b"extra-snapshot-value")
     for flags in (["--json"], ["--non-interactive"]):
-        code, output = terminal(["backup", "restore", snapshot_id, "--phase", "after", *flags], [])
+        code, output = terminal(
+            ["backup", "restore", snapshot_id, "--phase", "after", *flags], []
+        )
         assert code == 1 and b"Continue?" not in output
     code, output = terminal(
         ["backup", "restore", snapshot_id, "--phase", "after"],
@@ -267,9 +281,83 @@ file.write_bytes(b'\\xff\\x00edited\\n\\n')
     assert not (store / "passwords" / "snapshot-extra.age").exists()
     assert b"synthetic-snapshot-value" not in output
 
+    plugin_binary = str(Path(binary).parent / "age-plugin-fullafixture")
+    plugin_store = home / "plugin-store"
+    env["PATH"] = str(Path(plugin_binary).parent) + os.pathsep + env["PATH"]
+
+    def plugin_cli(*args: str, data: bytes = b"") -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            [binary, "--store", str(plugin_store), *args],
+            input=data,
+            env=env,
+            capture_output=True,
+            check=False,
+            timeout=15,
+        )
+
+    assert plugin_cli("init", "--no-git", "--yes").returncode == 0
+    keys = cast(
+        dict[str, str],
+        json.loads(
+            subprocess.run(
+                [plugin_binary, "fixture-keys"],
+                env=env,
+                capture_output=True,
+                check=True,
+                timeout=15,
+            ).stdout
+        ),
+    )
+    _ = (plugin_store / "identities").write_text(keys["identity"] + "\n")
+    _ = (plugin_store / "recipients").write_text(keys["recipient"] + "\n")
+    env["FULLA_PLUGIN_FIXTURE_REQUEST"] = ""
+    assert (
+        plugin_cli("add", "entry", "--stdin", data=b"plugin-fixture-value").returncode
+        == 0
+    )
+    env["FULLA_PLUGIN_FIXTURE_REQUEST"] = "1"
+    code, output = terminal(
+        ["show", "entry"], [(b"value (hidden):", b"fixture-pin\n")], target=plugin_store
+    )
+    assert (
+        code == 0 and b"plugin-fixture-value" in output and b"fixture-pin" not in output
+    )
+    for flags in (["--json"], ["--non-interactive"]):
+        code, output = terminal(["show", "entry", *flags], [], target=plugin_store)
+        assert (
+            code == 1
+            and b"interaction.required" in output
+            and b"value (hidden):" not in output
+        )
+    previous = (plugin_store / "passwords/entry.age").read_bytes()
+    code, output = terminal(
+        ["edit", "entry", "--generate"],
+        [(b"value (hidden):", signal.SIGTERM)],
+        target=plugin_store,
+    )
+    assert code == 143 and b"plugin-fixture-value" not in output
+    assert not (plugin_store / "lock").exists()
+    assert (plugin_store / "passwords/entry.age").read_bytes() == previous
+    env["FULLA_PLUGIN_FIXTURE_REQUEST"] = "confirm"
+    code, output = terminal(
+        ["add", "confirmed", "--generate", "--yes"],
+        [(b"allow? [y/N]:", b"n\n")],
+        target=plugin_store,
+    )
+    assert code == 1 and not (plugin_store / "passwords/confirmed.age").exists()
+    code, output = terminal(
+        ["add", "confirmed", "--generate", "--yes"],
+        [(b"allow? [y/N]:", b"y\n")],
+        target=plugin_store,
+    )
+    assert code == 0 and (plugin_store / "passwords/confirmed.age").exists()
+    assert b"\x1b[31m" not in output and b"fixture message" in output
+    env["FULLA_PLUGIN_FIXTURE_REQUEST"] = ""
+
 print(
     json.dumps(
         {
+            "plugin_terminal_interaction": True,
             "snapshot_restore_confirmation": True,
             "history_restore_confirmation": True,
             "initialization_confirmation": True,

@@ -574,3 +574,40 @@ CI: https://github.com/agensfield/fulla/actions/runs/33986961005.
 
 The full local Go 1.26.0 race suite and vet passed, including the working mock,
 existing missing-plugin/debug-mode fixtures, and native crypto/store tests.
+
+
+## Controlling-terminal plugin interaction
+
+Human CLI operations now supply plugin UI callbacks when opening stores, adopting
+pa stores, running diagnostics/recovery, and parsing explicit transfer identities
+or recipients. PIN and public-input requests use the existing hidden, cancellable
+controlling-terminal reader. Plugin names, prompts, messages, and choice labels
+are quoted to prevent terminal control sequences from being interpreted.
+
+JSON, noninteractive, and remote protocol modes receive no interactive callbacks.
+Plugin confirmation uses an independent default-no prompt; routine `--yes` does
+not approve it. Callback errors are redacted while preserving interaction-required
+and cancellation classification. Handled prepublication signals retain their exit
+status through the crypto boundary and release the store lock. Applied-state
+failures still follow the transaction recovery contract.
+
+Real PTY acceptance now uses the compiled mock plugin to prove hidden PIN entry,
+successful raw show, no prompting in JSON/noninteractive mode, SIGTERM before
+publication with unchanged ciphertext/no lock, and explicit plugin confirmation
+acceptance/refusal despite `--yes`. Ruff and basedpyright pass. To run the harness:
+
+```sh
+go build -o dist/fulla .
+go test -c -o dist/age-plugin-fullafixture ./internal/crypt
+python3 scripts/acceptance-interactive.py dist/fulla
+```
+
+CI compiles that test-only plugin before PTY acceptance. Hardware-touch timeout
+policy, hardware integration, and complete plugin-backed disaster restore remain
+open. The prior core plugin fix `0901368` passed Linux/macOS CI:
+https://github.com/agensfield/fulla/actions/runs/33987347981.
+
+The full Go 1.26.0 race suite and vet passed. After refining informational-message
+handling, CLI/crypto race tests, vet, Ruff/basedpyright, and the full PTY harness
+passed again. The mock emits an ANSI control sequence to verify quoted rendering;
+nonterminal commands continue when only an informational message is requested.

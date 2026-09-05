@@ -34,6 +34,7 @@ jobs:
       - name: Controlling-terminal acceptance
         run: |
           go build -o dist/fulla .
+          go test -c -o dist/age-plugin-fullafixture ./internal/crypt
           python3 scripts/acceptance-interactive.py dist/fulla
           python3 scripts/acceptance-clipboard.py dist/fulla
       - name: Checkout pinned shell-pa predecessor
