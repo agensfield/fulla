@@ -3,7 +3,39 @@ package crypt
 import (
 	"bytes"
 	"testing"
+
+	"filippo.io/age"
 )
+
+func TestNativeHybridIdentityRoundTrip(t *testing.T) {
+	id, err := age.GenerateHybridIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := Identities([]byte(id.String()), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, err := Recipients([]byte(id.Recipient().String()), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rs[0].(*age.HybridRecipient); !ok {
+		t.Fatal("native recipient was routed through a plugin")
+	}
+	value := []byte{0, 255, 'h', 10, 10}
+	ciphertext, err := Encrypt(value, rs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := Decrypt(ciphertext, ids)
+	if err != nil || !bytes.Equal(actual, value) {
+		t.Fatalf("hybrid exact-byte round trip failed: %v", err)
+	}
+	if _, err := Recipients([]byte("age1pq1invalid"), nil); err == nil {
+		t.Fatal("accepted malformed hybrid encoding")
+	}
+}
 
 func TestExactBytesAndAuthentication(t *testing.T) {
 	private, public, err := Generate()

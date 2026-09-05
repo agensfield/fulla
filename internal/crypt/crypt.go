@@ -44,6 +44,8 @@ func Recipients(data []byte, ui *plugin.ClientUI) ([]age.Recipient, error) {
 		switch {
 		case strings.HasPrefix(line, "ssh-"):
 			r, err = agessh.ParseRecipient(line)
+		case strings.HasPrefix(line, "age1pq1"):
+			r, err = age.ParseHybridRecipient(line)
 		case strings.HasPrefix(line, "age1"):
 			r, err = age.ParseX25519Recipient(line)
 			if err != nil {
