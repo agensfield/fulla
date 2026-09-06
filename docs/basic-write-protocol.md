@@ -83,3 +83,24 @@ recovery safe. This protocol is intended to establish the v1 guarantee before
 v1 is released, not to retroactively add it to already-built development binaries.
 The separate domain-transformation applicability question, physical power-loss
 acceptance and released rolling-upgrade gate remain open.
+
+## Snapshot lifecycle acceptance
+
+Git/no-Git fixtures now verify discovery and inspection of all basic snapshots
+while the transaction counter is newer. Unsupported snapshot restoration refuses
+before confirmation; retention preview preserves the entire store. After undoing
+only the fixture's injected counter, both before/after restoration recover exact
+binary values and the complete entry set. This is codec interoperability, not a
+production migration or permission to lower real manifest counters.
+
+A full encrypted disaster archive preserves those basic snapshots. Its restored
+clone can inspect and restore the old basic snapshot. Pruning removes both normal
+and basic snapshots while preserving live ciphertext exactly. The pre-protocol
+backup enumerator fails both lifecycle cases because it lists no basic snapshots.
+
+Native no-Git prune tests cover prepared, removed and receipted SIGKILL boundaries
+in both normal and basic namespaces. The prepared cases additionally remove a
+selected snapshot's own journal to reconstruct interrupted recursive unlink;
+recovery must finish from the independent prune journal and retain the newest
+snapshot. That extra unlink is a reconstructed boundary, distinct from the actual
+killed process. Targeted lifecycle/crash race and store vet pass.

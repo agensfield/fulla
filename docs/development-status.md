@@ -2451,3 +2451,22 @@ Staging-aware 1f39f93 refuses future-domain bound recovery by source inspection;
 831caf6 lacks that binding check and is unsafe for recovering this new state.
 No native historical-binary claim, real domain transformation, release tag or
 live credential cutover is inferred from these fixtures.
+
+
+### Basic snapshot recovery and retirement acceptance (2026-09-06)
+
+Extended the fixed-protocol acceptance beyond successful CRUD. Git/no-Git fixtures
+list and inspect basic snapshots with a newer transaction version; unsupported
+restoration refuses before confirmation, and prune preview leaves the store
+unchanged. Undoing only the injected fixture counter permits exact-byte before/
+after snapshot restoration, full-archive cloning and snapshot recovery from the
+clone. Final pruning removes normal/basic snapshots while preserving live
+ciphertext. This does not establish a real domain-version migration.
+
+The existing native prune crash matrix now runs against both snapshot namespaces:
+prepared, removed and receipted boundaries. Prepared cases reconstruct an
+additional partial recursive unlink by removing a snapshot's own journal, then
+require recovery from the independent prune journal and preservation of the
+newest snapshot. Targeted race passed (16.918s); store vet passed. A previous
+backup-enumerator source overlay fails both Git/no-Git lifecycle fixtures with
+"basic snapshots missing". No runtime behavior or release gate was weakened.

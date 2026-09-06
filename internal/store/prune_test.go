@@ -115,78 +115,86 @@ func TestPruneCrashHelper(t *testing.T) {
 }
 
 func TestPruneSurvivesKilledProcessAndPartialSnapshotRemoval(t *testing.T) {
-	for _, phase := range []string{"prepared", "removed", "receipted"} {
-		t.Run(phase, func(t *testing.T) {
-			s := fixture(t, false)
-			for i := range 3 {
-				if _, err := s.Write(fmt.Sprintf("entry%d", i), []byte{byte(i)}, false); err != nil {
-					t.Fatal(err)
-				}
+	for _, domain := range []string{"", basicProtocol} {
+		t.Run("domain="+domain, func(t *testing.T) {
+			for _, phase := range []string{"prepared", "removed", "receipted"} {
+				t.Run(phase, func(t *testing.T) {
+					s := fixture(t, false)
+					if domain == basicProtocol {
+						setTransactionVersion(t, s, 99)
+					}
+					for i := range 3 {
+						if _, err := s.Write(fmt.Sprintf("entry%d", i), []byte{byte(i)}, false); err != nil {
+							t.Fatal(err)
+						}
+					}
+					backups, err := s.Backups()
+					if err != nil {
+						t.Fatal(err)
+					}
+					cmd := exec.Command(os.Args[0], "-test.run=^TestPruneCrashHelper$")
+					cmd.Env = append(os.Environ(), "FULLA_PRUNE_FIXTURE="+s.Dir, "FULLA_PRUNE_PHASE="+phase)
+					output, err := cmd.StdoutPipe()
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := cmd.Start(); err != nil {
+						t.Fatal(err)
+					}
+					ready := make(chan bool, 1)
+					go func() {
+						scanner := bufio.NewScanner(output)
+						ready <- scanner.Scan() && scanner.Text() == "prune-ready"
+					}()
+					ok := false
+					select {
+					case ok = <-ready:
+					case <-time.After(10 * time.Second):
+					}
+					_ = cmd.Process.Kill()
+					_ = cmd.Wait()
+					if !ok {
+						t.Fatal("prune did not reach crash boundary")
+					}
+					if err := s.Unlocked(); err == nil {
+						t.Fatal("crashed prune was not locked")
+					}
+					data, err := securefs.Read(s.Root, metadata+"/prune.json", maxMetadata)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var journal pruneJournal
+					if err := json.Unmarshal(data, &journal); err != nil {
+						t.Fatal(err)
+					}
+					if phase == "prepared" {
+						// Reproduce interruption during recursive unlink, after removal of the
+						// backup's own journal. Recovery must use the independent prune journal.
+						if err := s.Root.Remove(snapshotBase(domain) + "/" + journal.Selected[0].ID + "/journal.json"); err != nil {
+							t.Fatal(err)
+						}
+					}
+					lock, err := s.InspectLock()
+					if err != nil || lock == nil || lock.Alive {
+						t.Fatal(lock, err)
+					}
+					if _, err := s.Recover(lock.Token); err != nil {
+						t.Fatal(err)
+					}
+					remaining, err := s.Backups()
+					if err != nil || len(remaining) != 1 || remaining[0].ID != backups[0].ID {
+						t.Fatal("wrong recovered selection", remaining, err)
+					}
+					if err := s.Unlocked(); err != nil {
+						t.Fatal(err)
+					}
+					receipt, err := securefs.Read(s.Root, metadata+"/receipts/"+journal.ID+".json", maxMetadata)
+					if err != nil || !bytes.Contains(receipt, []byte("backup prune")) {
+						t.Fatal("missing prune receipt", err)
+					}
+				})
 			}
-			backups, err := s.Backups()
-			if err != nil {
-				t.Fatal(err)
-			}
-			cmd := exec.Command(os.Args[0], "-test.run=^TestPruneCrashHelper$")
-			cmd.Env = append(os.Environ(), "FULLA_PRUNE_FIXTURE="+s.Dir, "FULLA_PRUNE_PHASE="+phase)
-			output, err := cmd.StdoutPipe()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := cmd.Start(); err != nil {
-				t.Fatal(err)
-			}
-			ready := make(chan bool, 1)
-			go func() {
-				scanner := bufio.NewScanner(output)
-				ready <- scanner.Scan() && scanner.Text() == "prune-ready"
-			}()
-			ok := false
-			select {
-			case ok = <-ready:
-			case <-time.After(10 * time.Second):
-			}
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-			if !ok {
-				t.Fatal("prune did not reach crash boundary")
-			}
-			if err := s.Unlocked(); err == nil {
-				t.Fatal("crashed prune was not locked")
-			}
-			data, err := securefs.Read(s.Root, metadata+"/prune.json", maxMetadata)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var journal pruneJournal
-			if err := json.Unmarshal(data, &journal); err != nil {
-				t.Fatal(err)
-			}
-			if phase == "prepared" {
-				// Reproduce interruption during recursive unlink, after removal of the
-				// backup's own journal. Recovery must use the independent prune journal.
-				if err := s.Root.Remove(metadata + "/backups/" + journal.Selected[0].ID + "/journal.json"); err != nil {
-					t.Fatal(err)
-				}
-			}
-			lock, err := s.InspectLock()
-			if err != nil || lock == nil || lock.Alive {
-				t.Fatal(lock, err)
-			}
-			if _, err := s.Recover(lock.Token); err != nil {
-				t.Fatal(err)
-			}
-			remaining, err := s.Backups()
-			if err != nil || len(remaining) != 1 || remaining[0].ID != backups[0].ID {
-				t.Fatal("wrong recovered selection", remaining, err)
-			}
-			if err := s.Unlocked(); err != nil {
-				t.Fatal(err)
-			}
-			receipt, err := securefs.Read(s.Root, metadata+"/receipts/"+journal.ID+".json", maxMetadata)
-			if err != nil || !bytes.Contains(receipt, []byte("backup prune")) {
-				t.Fatal("missing prune receipt", err)
-			}
+
 		})
 	}
 }
