@@ -32,8 +32,8 @@ func TestInitializationCrashHelper(t *testing.T) {
 	}
 }
 
-func TestInitializationCleanupFailureHelper(t *testing.T) {
-	directory := os.Getenv("FULLA_INIT_RECOVERY_DENY")
+func TestCreationCleanupFailureHelper(t *testing.T) {
+	directory := os.Getenv("FULLA_CREATION_RECOVERY_DENY")
 	if directory == "" {
 		return
 	}
@@ -48,7 +48,7 @@ func TestInitializationCleanupFailureHelper(t *testing.T) {
 		t.Fatal("missing owner", err)
 	}
 	_, err = s.recover(owner.Token, func() error {
-		if err := s.validateInitialization(); err != nil {
+		if err := s.validateCreation(); err != nil {
 			return err
 		}
 		return os.Chmod(directory, 0500)
@@ -112,7 +112,7 @@ func TestKilledInitializationRecovery(t *testing.T) {
 					t.Fatal("missing init binding", err)
 				}
 				before := archiveTree(t, s, false)
-				if _, err := RecoverInitialization(location, owner.Token); err == nil {
+				if _, err := RecoverCreation(location, owner.Token); err == nil {
 					t.Fatal("stole live initializer")
 				}
 				if !reflect.DeepEqual(before, archiveTree(t, s, false)) {
@@ -122,15 +122,15 @@ func TestKilledInitializationRecovery(t *testing.T) {
 					t.Fatal(err)
 				}
 				_ = cmd.Wait()
-				if _, err := RecoverInitialization(location, "wrong-owner"); err == nil {
+				if _, err := RecoverCreation(location, "wrong-owner"); err == nil {
 					t.Fatal("accepted wrong token")
 				}
 				if !reflect.DeepEqual(before, archiveTree(t, s, false)) {
 					t.Fatal("wrong-token refusal mutated stage")
 				}
 				if phase == "staged" && os.Geteuid() != 0 {
-					recovery := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestInitializationCleanupFailureHelper$")
-					recovery.Env = append(os.Environ(), "FULLA_INIT_RECOVERY_DENY="+location)
+					recovery := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCreationCleanupFailureHelper$")
+					recovery.Env = append(os.Environ(), "FULLA_CREATION_RECOVERY_DENY="+location)
 					output, err := recovery.CombinedOutput()
 					if err != nil {
 						t.Fatalf("cleanup failure helper: %v %s", err, output)
@@ -143,7 +143,7 @@ func TestKilledInitializationRecovery(t *testing.T) {
 					if err != nil || again == nil || again.Token == owner.Token || again.InitID != owner.InitID || again.InitTarget != target || again.Alive {
 						t.Fatal("lost replacement ownership", err)
 					}
-					if _, err := RecoverInitialization(location, owner.Token); err == nil {
+					if _, err := RecoverCreation(location, owner.Token); err == nil {
 						t.Fatal("accepted stale token after takeover")
 					}
 					owner = again
@@ -157,7 +157,7 @@ func TestKilledInitializationRecovery(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				result, err := RecoverInitialization(location, owner.Token)
+				result, err := RecoverCreation(location, owner.Token)
 				if err != nil || result["init_applied"] != (phase == "published") || result["lock_released"] != true {
 					t.Fatal("recovery failed", result, err)
 				}
@@ -197,7 +197,7 @@ func TestKilledInitializationRecovery(t *testing.T) {
 				if err := complete.Unlocked(); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := RecoverInitialization(target, owner.Token); err == nil {
+				if _, err := RecoverCreation(target, owner.Token); err == nil {
 					t.Fatal("repeated recovery accepted missing lock")
 				}
 			})

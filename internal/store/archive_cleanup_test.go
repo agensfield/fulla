@@ -87,6 +87,15 @@ func TestRestoreReportsFailedPrivateStageCleanup(t *testing.T) {
 			if _, err := os.Lstat(target); !os.IsNotExist(err) {
 				t.Fatal("failed cleanup published target", err)
 			}
+			retained, openErr := os.OpenRoot(stage)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+			owner, inspectErr := (&Store{Root: retained}).InspectLock()
+			retained.Close()
+			if inspectErr != nil || owner == nil || owner.RestoreID == "" || owner.RestoreStoreID != source.Meta.StoreID {
+				t.Fatal("cleanup lost restore ownership", inspectErr)
+			}
 			if _, err := os.Stat(filepath.Join(stage, "identities")); err != nil {
 				t.Fatal("fixture did not retain private identity material", err)
 			}

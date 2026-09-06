@@ -2,12 +2,14 @@ package store
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +71,7 @@ func TestRestoreHandledAndKilledPublicationBoundaries(t *testing.T) {
 			}
 			sourceStable := archiveTree(t, source, false)
 			for _, existing := range []bool{false, true} {
-				for _, phase := range []string{"file:identities", "validated", "target-vacated", "published", "synced"} {
+				for _, phase := range []string{"bound", "file:identities", "validated", "target-vacated", "published", "synced"} {
 					if phase == "target-vacated" && !existing {
 						continue
 					}
@@ -109,6 +111,21 @@ func TestRestoreHandledAndKilledPublicationBoundaries(t *testing.T) {
 									}
 								case <-time.After(25 * time.Second):
 									t.Fatal("restore boundary timed out")
+								}
+								location := target
+								if !published {
+									paths, err := filepath.Glob(filepath.Join(parent, ".fulla-restore-*"))
+									if err != nil || len(paths) != 1 {
+										t.Fatal("missing bound stage", err)
+									}
+									location = paths[0]
+								}
+								owner, err := PermissionLock(location)
+								if err != nil || owner == nil || owner.RestoreID == "" || owner.RestoreTarget != target {
+									t.Fatal("missing restore ownership", err)
+								}
+								if _, err := RecoverCreation(location, owner.Token); err == nil {
+									t.Fatal("stole live restore")
 								}
 								if err := cmd.Process.Kill(); err != nil {
 									t.Fatal(err)
@@ -164,7 +181,42 @@ func TestRestoreHandledAndKilledPublicationBoundaries(t *testing.T) {
 									t.Fatal(err)
 								}
 								defer restored.Close()
-								if !reflect.DeepEqual(expected, archiveTree(t, restored, false)) {
+								owner, err := restored.InspectLock()
+								if err != nil || owner == nil || owner.RestoreID == "" || owner.RestoreStoreID != source.Meta.StoreID {
+									t.Fatal("lost published binding", err)
+								}
+								if killed {
+									reused := filepath.Join(parent, ".fulla-restore-"+owner.RestoreID)
+									if err := os.Mkdir(reused, 0700); err != nil {
+										t.Fatal(err)
+									}
+									if err := os.WriteFile(filepath.Join(reused, "new-occupant"), []byte("preserved"), 0600); err != nil {
+										t.Fatal(err)
+									}
+									if _, err := RecoverCreation(target, "wrong-token"); err == nil {
+										t.Fatal("accepted wrong restore token")
+									}
+									result, err := RecoverCreation(target, owner.Token)
+									if err != nil || result["restore_applied"] != true {
+										t.Fatal("published recovery failed", result, err)
+									}
+									value, err := os.ReadFile(filepath.Join(reused, "new-occupant"))
+									if err != nil || string(value) != "preserved" {
+										t.Fatal("recovery deleted reused stage", err)
+									}
+								} else if _, err := RecoverCreation(target, owner.Token); err == nil {
+									t.Fatal("recovered live handled owner")
+								}
+								actual := archiveTree(t, restored, false)
+								if !killed {
+									// The handled failure retains exactly the verified owned lock.
+									for name := range actual {
+										if name == "lock" || strings.HasPrefix(name, "lock/") {
+											delete(actual, name)
+										}
+									}
+								}
+								if !reflect.DeepEqual(expected, actual) {
 									t.Fatal("published restore is not exact complete state")
 								}
 								if err := restored.DeepVerify(); err != nil {
@@ -206,6 +258,49 @@ func TestRestoreHandledAndKilledPublicationBoundaries(t *testing.T) {
 										t.Fatal("retry silently mutated orphan evidence")
 									}
 									_ = root.Close()
+									owner, err := PermissionLock(stages[0])
+									if err != nil || owner == nil {
+										t.Fatal("missing orphan ownership", err)
+									}
+
+									if phase == "validated" && os.Geteuid() != 0 {
+										ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+										defer cancel()
+										recovery := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCreationCleanupFailureHelper$")
+										recovery.Env = append(os.Environ(), "FULLA_CREATION_RECOVERY_DENY="+stages[0])
+										output, err := recovery.CombinedOutput()
+										if err != nil {
+											t.Fatalf("restore cleanup failure helper: %v %s", err, output)
+										}
+										if err := os.Chmod(stages[0], 0700); err != nil {
+											t.Fatal(err)
+										}
+										again, err := PermissionLock(stages[0])
+										if err != nil || again == nil || again.Token == owner.Token || again.RestoreID != owner.RestoreID || again.RestoreTarget != target || again.RestoreStoreID != source.Meta.StoreID || again.Alive {
+											t.Fatal("lost replacement restore ownership", err)
+										}
+										if _, err := RecoverCreation(stages[0], owner.Token); err == nil {
+											t.Fatal("accepted stale restore token")
+										}
+										owner = again
+									}
+									targetRoot, err := os.OpenRoot(target)
+									if err != nil {
+										t.Fatal(err)
+									}
+									targetStore := &Store{Dir: target, Root: targetRoot}
+									targetBefore := archiveTree(t, targetStore, false)
+									result, err := RecoverCreation(stages[0], owner.Token)
+									if err != nil || result["restore_applied"] != false {
+										t.Fatal("unpublished recovery failed", result, err)
+									}
+									if _, err := os.Lstat(stages[0]); !os.IsNotExist(err) {
+										t.Fatal("owned orphan retained", err)
+									}
+									if !reflect.DeepEqual(targetBefore, archiveTree(t, targetStore, false)) {
+										t.Fatal("stage recovery changed independently restored target")
+									}
+									targetRoot.Close()
 								}
 							}
 							if !reflect.DeepEqual(sourceStable, archiveTree(t, source, false)) {

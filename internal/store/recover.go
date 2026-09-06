@@ -18,17 +18,20 @@ import (
 )
 
 type LockInfo struct {
-	Token       string `json:"token"`
-	Operation   string `json:"operation"`
-	PeerReceipt string `json:"peer_receipt,omitempty"`
-	StageID     string `json:"stage_id,omitempty"`
-	AdoptionID  string `json:"adoption_id,omitempty"`
-	InitID      string `json:"init_id,omitempty"`
-	InitTarget  string `json:"init_target,omitempty"`
-	PID         int    `json:"pid"`
-	Host        string `json:"host"`
-	Alive       bool   `json:"alive"`
-	Local       bool   `json:"local"`
+	Token          string `json:"token"`
+	Operation      string `json:"operation"`
+	PeerReceipt    string `json:"peer_receipt,omitempty"`
+	StageID        string `json:"stage_id,omitempty"`
+	AdoptionID     string `json:"adoption_id,omitempty"`
+	InitID         string `json:"init_id,omitempty"`
+	InitTarget     string `json:"init_target,omitempty"`
+	RestoreID      string `json:"restore_id,omitempty"`
+	RestoreTarget  string `json:"restore_target,omitempty"`
+	RestoreStoreID string `json:"restore_store_id,omitempty"`
+	PID            int    `json:"pid"`
+	Host           string `json:"host"`
+	Alive          bool   `json:"alive"`
+	Local          bool   `json:"local"`
 }
 
 func (s *Store) InspectLock() (*LockInfo, error) {
@@ -85,7 +88,25 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 				return nil, fault.New("store.lock_unknown", "invalid initialization target")
 			}
 			info.InitTarget = string(decoded)
+		case "restore_id", "restore_store_id":
+			field := &info.RestoreID
+			if key == "restore_store_id" {
+				field = &info.RestoreStoreID
+			}
+			if *field != "" || !validID(value) {
+				return nil, fault.New("store.lock_unknown", "invalid restore binding")
+			}
+			*field = value
+		case "restore_target":
+			decoded, err := base64.RawURLEncoding.DecodeString(value)
+			if info.RestoreTarget != "" || err != nil || len(decoded) == 0 {
+				return nil, fault.New("store.lock_unknown", "invalid restore target")
+			}
+			info.RestoreTarget = string(decoded)
 		}
+	}
+	if (info.RestoreID == "") != (info.RestoreTarget == "") || (info.RestoreID == "" && info.RestoreStoreID != "") || (info.RestoreID != "" && (info.InitID != "" || info.StageID != "" || info.AdoptionID != "" || info.PeerReceipt != "")) {
+		return nil, fault.New("store.lock_unknown", "conflicting restore binding")
 	}
 	if (info.InitID == "") != (info.InitTarget == "") || (info.InitID != "" && (info.StageID != "" || info.AdoptionID != "" || info.PeerReceipt != "")) {
 		return nil, fault.New("store.lock_unknown", "conflicting initialization binding")
@@ -111,11 +132,11 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 func (s *Store) Recover(expected string) (map[string]any, error) {
 	if info, err := s.InspectLock(); err != nil {
 		return nil, err
-	} else if info != nil && info.InitID != "" {
-		if err := s.validateInitialization(); err != nil {
+	} else if info != nil && (info.InitID != "" || info.RestoreID != "") {
+		if err := s.validateCreation(); err != nil {
 			return nil, err
 		}
-		return s.recover(expected, s.validateInitialization)
+		return s.recover(expected, s.validateCreation)
 	}
 	if _, err := s.Root.Lstat(metadata); errors.Is(err, fs.ErrNotExist) {
 		info, err := s.InspectLock()
@@ -167,10 +188,13 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	count := 0
-	if info.InitID != "" {
+	creationUnpublished := false
+	if info.InitID != "" || info.RestoreID != "" {
 		count++
-		if _, err := s.initializationPublished(info); err != nil {
+		if published, err := s.creationPublished(info); err != nil {
 			return nil, err
+		} else {
+			creationUnpublished = !published
 		}
 	}
 	if info.AdoptionID != "" {
@@ -183,6 +207,10 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		count++
 	}
 	for _, name := range []string{"pending.json", "rotation.json", "prune.json"} {
+		// An unpublished archive's files are cleanup material, not live journals.
+		if info.RestoreID != "" && creationUnpublished {
+			break
+		}
 		if _, err := s.Root.Lstat(metadata + "/" + name); err == nil {
 			count++
 		} else if !errors.Is(err, fs.ErrNotExist) {
@@ -214,6 +242,13 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if info.InitID != "" {
 		newInfo = strings.TrimSpace(newInfo) + " init_id=" + info.InitID + " init_target=" + base64.RawURLEncoding.EncodeToString([]byte(info.InitTarget)) + "\n"
 	}
+	if info.RestoreID != "" {
+		newInfo = strings.TrimSpace(newInfo) + " restore_id=" + info.RestoreID + " restore_target=" + base64.RawURLEncoding.EncodeToString([]byte(info.RestoreTarget))
+		if info.RestoreStoreID != "" {
+			newInfo += " restore_store_id=" + info.RestoreStoreID
+		}
+		newInfo += "\n"
+	}
 	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
 		return nil, err
 	}
@@ -222,8 +257,8 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	expected = newToken
-	if info.InitID != "" {
-		return s.recoverInitialization(info, expected)
+	if info.InitID != "" || info.RestoreID != "" {
+		return s.recoverCreation(info, expected)
 	}
 	if info.AdoptionID != "" {
 		return s.recoverAdoption(info.AdoptionID, expected)

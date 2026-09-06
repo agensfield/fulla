@@ -110,7 +110,7 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 				if inspectErr != nil || owner == nil || owner.Token != initLock.Token {
 					cleanupErr = fault.New("store.lock_changed", "initialization staging ownership changed")
 				} else {
-					cleanupErr = removeInitializationContents(root)
+					cleanupErr = removeCreationContents(root)
 				}
 				root.Close()
 			}
@@ -147,7 +147,7 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 	if err != nil {
 		return result, err
 	}
-	if err := s.bindInitialization(initLock, meta.StoreID, directory); err != nil {
+	if err := s.bindCreation(initLock, "init", meta.StoreID, directory); err != nil {
 		return result, err
 	}
 	if err := securefs.SyncDir(r, "."); err != nil {

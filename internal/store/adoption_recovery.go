@@ -15,7 +15,7 @@ func (s *Store) bindAdoption(lock *Lock, id string) error {
 	if err != nil {
 		return err
 	}
-	if info == nil || info.InitID != "" || info.Token != lock.Token || info.Operation != "adopt" || !validID(id) || info.AdoptionID != "" || info.StageID != "" || info.PeerReceipt != "" {
+	if info == nil || info.InitID != "" || info.RestoreID != "" || info.Token != lock.Token || info.Operation != "adopt" || !validID(id) || info.AdoptionID != "" || info.StageID != "" || info.PeerReceipt != "" {
 		return fault.New("store.lock_changed", "cannot bind adoption to this lock")
 	}
 	data, err := securefs.Read(s.Root, "lock/info", 4096)

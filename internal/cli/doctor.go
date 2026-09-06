@@ -46,8 +46,8 @@ func (a *App) doctor(p invocation, c *config.Resolved) (any, error) {
 		if p.has("report") || p.has("deep") {
 			return nil, fault.Usage("lock recovery cannot be combined with diagnostic inspection")
 		}
-		if owner, err := store.PermissionLock(c.StorePath); err == nil && owner != nil && owner.InitID != "" {
-			return store.RecoverInitialization(c.StorePath, p.value("recover-lock"))
+		if owner, err := store.PermissionLock(c.StorePath); err == nil && owner != nil && (owner.InitID != "" || owner.RestoreID != "") {
+			return store.RecoverCreation(c.StorePath, p.value("recover-lock"))
 		}
 		s, err := store.Open(c.StorePath, false, commandIdentityUI(p))
 		if err != nil {

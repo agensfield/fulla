@@ -209,18 +209,37 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		return result, err
 	}
 	defer root.Close()
-	stage := ".fulla-restore-" + securefs.ID()
+	restoreID := securefs.ID()
+	stage := ".fulla-restore-" + restoreID
 	if err := root.Mkdir(stage, 0o700); err != nil {
 		return result, err
 	}
 	published := false
+	var restoreLock *Lock
 	defer func() {
 		// Once renamed, this path no longer names our stage. Never remove a new
 		// occupant that happens to reuse the old staging name.
 		if published {
 			return
 		}
-		cleanupErr := root.RemoveAll(stage)
+		var cleanupErr error
+		if restoreLock != nil {
+			owned, openErr := root.OpenRoot(stage)
+			if openErr != nil {
+				cleanupErr = openErr
+			} else {
+				owner, inspectErr := (&Store{Root: owned}).InspectLock()
+				if inspectErr != nil || owner == nil || owner.Token != restoreLock.Token {
+					cleanupErr = fault.New("store.lock_changed", "restore staging ownership changed")
+				} else {
+					cleanupErr = removeCreationContents(owned)
+				}
+				owned.Close()
+			}
+		}
+		if cleanupErr == nil {
+			cleanupErr = root.RemoveAll(stage)
+		}
 		if cleanupErr == nil {
 			cleanupErr = securefs.SyncDir(root, ".")
 		}
@@ -246,6 +265,20 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		return result, err
 	}
 	defer staged.Close()
+	stageStore := &Store{Dir: filepath.Join(parent, stage), Root: staged}
+	restoreLock, err = stageStore.lock("restore", func() error { return nil })
+	if err != nil {
+		return result, err
+	}
+	if err := stageStore.bindCreation(restoreLock, "restore", restoreID, target); err != nil {
+		return result, err
+	}
+	if err := securefs.SyncDir(root, "."); err != nil {
+		return result, err
+	}
+	if err := checkpoint("bound"); err != nil {
+		return result, err
+	}
 	total := int64(0)
 	seen := map[string]bool{}
 	tr := tar.NewReader(r)
@@ -313,7 +346,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		s.Close()
 		return result, err
 	}
-	if err := s.Unlocked(); err != nil {
+	if err := s.bindRestorePublication(restoreLock); err != nil {
 		s.Close()
 		return result, err
 	}
@@ -342,6 +375,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		return result, fault.New("recovery.publish_failed", "could not publish restore without replacement")
 	}
 	published = true
+	stageStore.Dir = target
 	if err := checkpoint("published"); err != nil {
 		return result, fault.Applied("restore published but completion interrupted", "restore")
 	}
@@ -350,6 +384,9 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 	}
 	if err := checkpoint("synced"); err != nil {
 		return result, fault.Applied("restore published but completion interrupted", "restore")
+	}
+	if err := restoreLock.Release(); err != nil {
+		return result, fault.Applied("restore published but lock release failed", "restore")
 	}
 	result.Bytes = total
 	return result, nil

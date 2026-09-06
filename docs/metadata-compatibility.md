@@ -204,3 +204,13 @@ its shared lock before creating keys, retaining the lock through publication.
 cleanup, published-store finalization, killed-owner and failed-cleanup retry
 fixtures, and the development-reader rollback boundary. Domain versions do not
 change; legacy unbound staging is not granted deletion authority.
+
+## Restore recovery binding
+
+Current restore adds optional restore_id and encoded restore_target lock fields
+before extraction, then restore_store_id only after full authentication and
+verification. Takeover preserves all three. Shared creation recovery distinguishes
+unpublished cleanup from published finalization without a new domain version.
+Older development readers ignore these optional fields; use current Fulla for
+pending restore recovery. See [archive recovery](archive-recovery.md) for fixtures
+and legacy/final-lock-removal limits.

@@ -2264,3 +2264,37 @@ inspection assertion passed (1.587s). Predecessor 625118a CI 34012554978 passed
 Linux/macOS. See init-recovery.md for development rollback and remaining legacy
 unbound staging, full-restore staging, final lock-removal and power-loss limits.
 No live credentials or retention policy changed.
+
+
+### Owned full-restore staging and explicit recovery (2026-09-06)
+
+Restore now binds the shared lock before extracting archive contents and records
+the authenticated restored store ID before publication. It shares initialization's
+creation-recovery implementation. Unpublished recovery removes only the owned
+clone; published recovery verifies the store binding and finalizes parent sync
+and lock release. Extracted unpublished journals are opaque cleanup material,
+while published conflicting journals are refused. No domain version, command
+surface, retention policy or live credential state changes.
+
+The expanded 44-case Git/no-Git handled/SIGKILL matrix covers pre-extraction binding
+through parent sync, independent fresh retry, exact restored paths/modes/bytes,
+live/wrong-token refusal and reused-stage preservation. Real cleanup-denial
+subprocesses prove replacement-token/binding retention and subsequent retry.
+Public CLI tests cover both creation kinds. Reconstructed fixtures cover missing
+or mismatched published store IDs and opaque unpublished journals.
+
+A negative source overlay skipping contents-first cleanup fails all three cleanup
+regressions because lock/info disappears before private-file removal fails. A
+new reconstructed fixture initially kept a stale directory name in its root
+handle after renaming; reopening the root fixed its tree inspection. An initial
+test compile error also needed a local subprocess timeout context. Neither was
+a production failure or a suppressed assertion.
+
+Targeted creation/restore race passed (CLI 1.570s, store 36.786s); reconstructed
+binding cases passed (2.826s). The first full run failed only on the already-fixed
+stale fixture handle (store 360.501s); CLI 92.425s and remote 101.090s passed.
+Independent full vet passed. The clean full race rerun passed (store 295.486s,
+other packages cached), followed by full vet.
+Predecessor f9de8f4 CI 34013360497 passed Linux/macOS. Legacy unbound copies,
+general final lock-removal interruption and physical power-loss acceptance remain
+open. See archive-recovery.md and the acceptance matrix.

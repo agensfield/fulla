@@ -54,7 +54,7 @@ func (s *Store) bindStaging(lock *Lock, id string) error {
 	if err != nil {
 		return err
 	}
-	if info == nil || info.InitID != "" || info.Token != lock.Token || !validID(id) || info.StageID != "" || info.PeerReceipt != "" || info.AdoptionID != "" {
+	if info == nil || info.InitID != "" || info.RestoreID != "" || info.Token != lock.Token || !validID(id) || info.StageID != "" || info.PeerReceipt != "" || info.AdoptionID != "" {
 		return fault.New("store.lock_changed", "cannot bind staging to this lock")
 	}
 	data, err := securefs.Read(s.Root, "lock/info", 4096)
