@@ -2004,3 +2004,21 @@ fresh caches and passing installed-binary checks. Native binary hashes and the
 run link are preserved in distribution.md. These are development-commit receipts,
 not tagged release or Homebrew acceptance; Linux/arm64 and macOS/amd64 native
 installation also remain separate.
+
+### Bounded internal Git output (2026-09-06)
+
+Internal Git previously used Command.Output with no stdout size bound, including
+historical blobs buffered before decryption. Internal metadata output now has a
+4 MiB cap; history restore uses the existing ciphertext budget (64 MiB entry
+plus 1 MiB overhead). A non-embedding bounded writer prevents io.Copy fast paths
+from bypassing the limit. Excess output cancels the owned child, which is reaped
+before a typed git.output_limit error with limit_bytes is returned without
+partial stdout. Stderr is discarded; pipe cleanup after cancellation/child exit
+is bounded to one second. No ordinary active-operation timeout was introduced.
+
+Tests cover exact/over-limit copies, native Git boundaries, termination/reaping
+of a fixture ignoring pipe errors, unchanged store inventory, and a successful
+history restore above the metadata cap. Targeted race tests passed (6.037s), as
+did vet. A negative overlay removing cancellation hits the bounded subprocess
+watchdog and cleans its private process group. Expert fulla git remains native;
+large metadata is an explicit refusal, never silent truncation.

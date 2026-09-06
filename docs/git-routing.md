@@ -34,5 +34,28 @@ intact; production does not permit ambient tracing merely to support a test.
 This is a routing boundary for ordinary internal operations. Explicit `fulla git`
 remains the documented expert escape hatch with user arguments/environment.
 Trusted Git executables/configuration and same-Unix-user mutation are not an
-isolation boundary. Subprocess time/output bounds and the broader Git security
-review remain separate work.
+isolation boundary. The internal output boundary below is now implemented. Active-operation
+deadlines and the broader Git security review remain separate work.
+
+## Internal output bounds
+
+Ordinary internal Git stdout is limited to 4 MiB, matching Fulla's metadata
+read budget. Historical ciphertext extraction uses 65 MiB instead, matching
+the existing 64 MiB entry limit plus ciphertext overhead. The first excess
+write cancels the owned Git command; Fulla waits for it to be reaped and returns
+`git.output_limit` with `limit_bytes`, never partial stdout. Buffer content is
+bounded; allocator capacity and parser allocations are not claimed to equal
+exactly that byte limit. Stderr is discarded instead of retained for diagnostics.
+
+Pipe cleanup is limited to one second after cancellation or child exit, including
+inherited descriptors. This is not an elapsed-time deadline for an otherwise
+active Git operation, nor termination of arbitrary independent descendants.
+Explicit `fulla git` retains its native process/stream behavior. Large history
+metadata may require that expert command; Fulla does not silently truncate a
+metadata result and present it as complete.
+
+Tests cover exact-limit/over-limit io.Copy, native Git output boundaries, a
+producer that ignores pipe errors and remains alive, actual termination/reaping,
+no partial output or store changes, and restoration of a historical value larger
+than the metadata limit. A negative overlay omitting cancellation makes the
+subprocess watchdog fail; it cleans only the fixture's own process group.

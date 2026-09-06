@@ -1,17 +1,24 @@
 package store
 
 import (
+	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/agensfield/fulla/internal/fault"
 )
 
 func (s *Store) Git(args ...string) ([]byte, error) {
+	return s.gitOutput(maxMetadata, args...)
+}
+
+func (s *Store) gitOutput(limit int, args ...string) ([]byte, error) {
 	// A textual commondir can redirect refs/objects even when all filesystem
 	// paths are nonsymlinks. Fulla only supports a self-contained repository.
 	for _, name := range []string{"passwords/.git/commondir", "passwords/.git/objects/info/alternates"} {
@@ -28,13 +35,26 @@ func (s *Store) Git(args ...string) ([]byte, error) {
 	a = append(a, args...)
 	// Git stderr can contain hooks, filters, filenames, or configured commands.
 	// Caller diagnostics never forward arbitrary subprocess output.
-	command := exec.Command("git", a...)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	command := exec.CommandContext(ctx, "git", a...)
 	command.Env = internalGitEnvironment(os.Environ())
-	out, err := command.Output()
+	output := &gitOutputBuffer{limit: limit, cancel: cancel}
+	command.Stdout = output
+	command.Stderr = io.Discard
+	// Bound pipe cleanup after cancellation or child exit, including inherited
+	// descriptors. This is not a deadline for an otherwise active Git operation.
+	command.WaitDelay = time.Second
+	err := command.Run()
+	if output.exceeded {
+		failure := fault.New("git.output_limit", "Git output exceeds the internal limit; inspect the repository with fulla git")
+		failure.Details["limit_bytes"] = limit
+		return nil, failure
+	}
 	if err != nil {
 		return nil, fault.New("git.failed", "Git operation failed; inspect the encrypted repository with fulla git")
 	}
-	return out, nil
+	return output.Bytes(), nil
 }
 
 func internalGitEnvironment(environment []string) []string {

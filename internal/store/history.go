@@ -124,7 +124,7 @@ func (s *Store) HistoryRestoreConfirmed(ref, name string, confirm func(HistoryRe
 	if !enabled {
 		return result, fault.New("history.unavailable", "store has no Git history")
 	}
-	ciphertext, err := s.Git("show", ref+":"+name+".age")
+	ciphertext, err := s.gitOutput(crypt.MaxEntryBytes+1<<20, "show", ref+":"+name+".age")
 	if err != nil {
 		return result, err
 	}
