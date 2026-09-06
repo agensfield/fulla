@@ -1562,3 +1562,26 @@ actual-rename/injected-sync-failure test and store vet. See
 Pre-journal ignored cleanup failures and killed-writer orphans remain separate
 work. This fix does not claim physical power-loss durability. Prior 762bc31
 passed Linux/macOS CI 34000545363.
+
+### Report unpublished-stage cleanup failures (2026-09-06)
+
+Transactions and rotations now share owned-stage cleanup: a directory is eligible
+only after exclusive creation succeeds, removal is followed by parent sync, and
+owned-lock release is attempted even if staging removal fails. Cleanup/release
+errors produce redacted transaction.cleanup_failed details rather than being
+silently replaced by the original operation error. Signal statuses survive;
+failed ownership checks do not remove another owner's lock. Human errors show a
+quoted staging path and lock-inspection guidance; machine details remain typed.
+
+Twelve real chmod-denial fixtures cover Git/no-Git × transaction/rotation ×
+error/refusal/signal, including retained staged private identity files. Existing
+store bytes remain unchanged and ordinary reads retain the original value after
+lock release. A thirteenth test checks changed-lock ownership. A source overlay
+restoring ignored cleanup/release errors fails all 13. The broader handled and
+killed transaction/rotation recovery race group passed (64.0s), CLI cleanup/panic
+race tests and store/CLI vet passed. See [cleanup semantics](journal-publication.md).
+
+This does not implement automatic SIGKILL orphan discovery/removal. A cleanup
+path can describe partially removed staging or uncertain deletion durability;
+no false guarantee of complete retained data is made. Prior 25b46f6 passed both
+platforms in CI 34000815401.

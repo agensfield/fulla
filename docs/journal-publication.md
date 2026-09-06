@@ -39,6 +39,36 @@ Evidence:
 The internal hook is not a runtime flag. Store tests inject after successful
 journal publication; the lower-level securefs test separately covers sync-error
 publication reporting. They do not simulate physical power loss or establish
-that a failed fsync reached persistent media. Pre-journal cleanup reporting,
-pre-journal killed-writer orphan handling, and other publication surfaces remain
+that a failed fsync reached persistent media. Pre-journal killed-writer orphan handling and other publication surfaces remain
 separate acceptance work.
+
+## Unpublished staging cleanup
+
+Handled failures before journal publication now remove only a directory whose
+exclusive creation succeeded, synchronize its parent after removal, and attempt
+to release the owned lock. Both transaction and rotation use the same cleanup
+path. Cleanup or lock-release failures are no longer silently hidden behind the
+original operation error.
+
+`transaction.cleanup_failed` reports `applied: false`, `cleanup_required: true`,
+and the applicable `staging_path`/`staging_cleanup_required` or
+`lock_cleanup_required`. A staging path means removal or its durability could
+not be confirmed; some or all files may already have been removed. A lock flag
+means lock cleanup needs inspection, not that the original owner still owns it.
+The original typed operation code is retained without its message/details;
+signal statuses 129/130/131/143 are preserved. Other cleanup failures use status 1.
+Human output quotes the staging path to escape control characters and directs
+lock inspection to `fulla doctor`; JSON retains structured details.
+
+Twelve real permission-denial cases cover Git/no-Git × transaction/rotation ×
+ordinary error/refusal/signal. They verify cleanup evidence, unchanged existing
+store files, no changes outside owned staging, released lock and readable
+unchanged live value. Rotation fixtures retain the generated staged identity to
+make the private-copy risk concrete. A changed-lock-owner test verifies that its
+files remain untouched and that its release failure is reported. Reinstating
+ignored cleanup errors through a source overlay makes all 13 cases fail.
+
+These are handled-failure tests on disposable non-root fixtures, not SIGKILL
+cleanup or an automatic orphan-removal mechanism. Unpublished leftover staging
+has no committed recovery journal. Do not infer that ordinary recovery will
+finish or discard it; automatic identification and safe cleanup remain open.

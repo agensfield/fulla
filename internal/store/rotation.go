@@ -63,14 +63,10 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 	}
 	pending := false
 	dir := ""
+	ownedStage := ""
 	defer func() {
 		if !pending {
-			if dir != "" {
-				_ = s.Root.RemoveAll(dir)
-			}
-			if e := lock.Release(); e != nil && err == nil {
-				err = e
-			}
+			err = s.finishUnpublished(lock, ownedStage, err)
 		}
 	}()
 	if _, err := s.CleanGit(); err != nil {
@@ -107,6 +103,7 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 	if err := s.Root.Mkdir(dir, 0o700); err != nil {
 		return result, err
 	}
+	ownedStage = dir
 	j := Rotation{Version: 1, ID: id, Phase: "prepared", Started: time.Now().UTC().Format(time.RFC3339Nano), OldFingerprint: old.Fingerprint, NewFingerprint: crypt.Fingerprint(public), Retired: metadata + "/retired/" + id + ".age", Destroy: destroy, Compromise: compromise, Changes: []RotationChange{}}
 	if enabled, _ := s.GitEnabled(); enabled {
 		j.GitBefore, err = s.Head()

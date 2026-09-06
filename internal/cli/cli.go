@@ -121,6 +121,14 @@ func (a *App) failure(command string, jsonMode bool, err error) int {
 		_ = json.NewEncoder(a.Out).Encode(envelope{Schema: "fulla.cli/v1", OK: false, Command: command, Error: e})
 	} else {
 		fmt.Fprintln(a.Err, e.Error())
+		if e.Details["cleanup_required"] == true {
+			if staging, ok := e.Details["staging_path"].(string); ok {
+				fmt.Fprintf(a.Err, "  staging cleanup to verify: %q\n", staging)
+			}
+			if e.Details["lock_cleanup_required"] == true {
+				fmt.Fprintln(a.Err, "  inspect the shared lock with fulla doctor before recovery")
+			}
+		}
 		if report, ok := e.Details["report"].(store.DoctorResult); ok {
 			for _, issue := range report.Issues {
 				fmt.Fprintf(a.Err, "  issue: %q\n", issue)

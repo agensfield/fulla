@@ -74,18 +74,16 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 	id := securefs.ID()
 	dir := metadata + "/transactions/" + id
 	pending := false
+	ownedStage := ""
 	defer func() {
 		if !pending {
-			_ = s.Root.RemoveAll(dir)
-			releaseErr := lock.Release()
-			if err == nil {
-				err = releaseErr
-			}
+			err = s.finishUnpublished(lock, ownedStage, err)
 		}
 	}()
 	if err := s.Root.Mkdir(dir, 0o700); err != nil {
 		return result, err
 	}
+	ownedStage = dir
 	for _, sub := range []string{"before", "after"} {
 		if err := s.Root.Mkdir(dir+"/"+sub, 0o700); err != nil {
 			return result, err
