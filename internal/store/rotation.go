@@ -57,6 +57,11 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 	if destroy && ack != "destroy-retired-key:"+old.Fingerprint {
 		return result, fault.Interaction("destructive rotation requires --acknowledge destroy-retired-key:OLD_FINGERPRINT")
 	}
+	if destroy {
+		if err := s.requireCleanRetirementStaging(""); err != nil {
+			return result, err
+		}
+	}
 	lock, err := s.Lock("identity rotate")
 	if err != nil {
 		return result, err
@@ -69,6 +74,14 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 			err = s.finishUnpublished(lock, ownedStage, err)
 		}
 	}()
+	if destroy {
+		// Recheck under the shared lock before reading private identities or
+		// creating this rotation's stage. An earlier abandoned rotation can
+		// retain a new private identity together with a sealed copy of the old one.
+		if err := s.requireCleanRetirementStaging(""); err != nil {
+			return result, err
+		}
+	}
 	if _, err := s.CleanGit(); err != nil {
 		return result, err
 	}
@@ -210,6 +223,28 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 	return result, nil
 }
 
+func (s *Store) requireCleanRetirementStaging(ownedID string) error {
+	staging, err := s.inspectStaging()
+	if err != nil {
+		return err
+	}
+	other := []string{}
+	for _, dir := range staging {
+		if ownedID == "" || dir != metadata+"/transactions/"+ownedID {
+			other = append(other, dir)
+		}
+	}
+	if len(other) != 0 {
+		err := fault.New("identity.staging_present", "inspect leftover transaction staging with fulla doctor before destructive identity rotation")
+		err.Details["staging"] = other
+		if ownedID == "" {
+			err.Details["applied"] = false
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Store) rotationWrite(j *Rotation) error {
 	data, err := json.Marshal(j)
 	if err != nil {
@@ -224,6 +259,13 @@ func (s *Store) finishRotation(j *Rotation, hook func(string) error) error {
 	}
 	if j.Phase != "prepared" && j.Phase != "published" && j.Phase != "committed" && j.Phase != "retired" {
 		return fault.New("identity.invalid_rotation", "unknown rotation phase")
+	}
+	if j.Destroy {
+		// Recovery may be resuming a journal written by an older binary. Only
+		// this validated journal's own stage is covered by its cleanup protocol.
+		if err := s.requireCleanRetirementStaging(j.ID); err != nil {
+			return err
+		}
 	}
 	dir := metadata + "/transactions/" + j.ID
 	if j.Phase == "prepared" {

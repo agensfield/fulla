@@ -103,3 +103,39 @@ This inventory is a momentary observation, not an ownership or abandonment
 proof. A live writer may be using the directory, a valid recovery journal may
 need it, or an interrupted unpublished operation may have left it. Automatic
 orphan classification/removal and sibling full-restore staging remain open.
+
+## Destructive retirement and leftover key capsules
+
+An abandoned rotation can leave both a generated private identity and the old
+private identity encrypted to its recipient under staging. Together they can
+recover the old key even if a later rotation deletes the ordinary retired-key
+directory. Tests now decrypt that staged capsule, compare the recovered key
+exactly with the current fixture identity, and use it to decrypt an existing
+entry. This is local retained recovery material, not merely an external-copy
+limitation.
+
+Fresh destructive rotation therefore refuses nonempty or uninspectable staging
+before acquiring a lock and rechecks under its owned lock before reading private
+keys or creating its own stage. `identity.staging_present` includes the paths
+and `applied: false`, directing inspection through doctor. No inferred orphan
+is deleted automatically. Continuity-preserving rotation does not make a local
+key-destruction claim and keeps its existing behavior.
+
+Destructive recovery also checks for unrelated staging, excluding only the
+validated pending journal's own transaction ID. This protects recovery of older
+journals as well as fresh operations. A resumed journal may already have changed
+live state, so this internal refusal does not assert `applied: false`; the normal
+recovery-incomplete wrapper retains the lock and applied-state warning.
+
+Two actual killed-rotation fixtures prove the key-capsule risk and unchanged-store
+refusal on Git/no-Git. Two pending destructive-recovery fixtures introduce an
+unrelated private stage and verify that refusal preserves all live files,
+journals, staging and lock evidence. Disabling the guard makes all four refusal
+cases fail. Normal continuity/destruction and destructive killed-owner recovery
+with only the owned stage continue to pass.
+
+The inventory is deliberately conservative: any other stage requires inspection,
+without guessing from filenames whether it contains a private key. Safe cleanup
+of those leftovers remains required work. The shared-lock contract coordinates
+Fulla/pa writers; this does not add same-Unix-user isolation or revoke external
+copies, backups, filesystem snapshots, or previously exported recovery archives.

@@ -2,8 +2,11 @@ package store
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"reflect"
@@ -11,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agensfield/fulla/internal/crypt"
+	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
 )
 
@@ -75,6 +80,7 @@ func TestDoctorReportsUnjournaledKilledWriterStaging(t *testing.T) {
 					if _, err := s.Root.Lstat(report.Staging[0] + "/after/identities"); err != nil {
 						t.Fatal("rotation fixture has no retained private identity", err)
 					}
+					proveOrphanRetirementRisk(t, s, report.Staging[0])
 				}
 				for _, name := range []string{"a", "entry"} {
 					value, err := s.Read(name)
@@ -84,6 +90,60 @@ func TestDoctorReportsUnjournaledKilledWriterStaging(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func proveOrphanRetirementRisk(t *testing.T, s *Store, staging string) {
+	t.Helper()
+	private, err := securefs.Read(s.Root, staging+"/after/identities", maxMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := crypt.Identities(private, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retired := staging + "/after/" + metadata + "/retired"
+	entries, err := fs.ReadDir(s.Root.FS(), retired)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("missing orphan sealed identity", err)
+	}
+	sealed, err := securefs.Read(s.Root, retired+"/"+entries[0].Name(), maxMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsealed, err := crypt.Decrypt(sealed, ids)
+	if err != nil {
+		t.Fatal("orphan identity did not unwrap old private key", err)
+	}
+	current, err := securefs.Read(s.Root, "identities", maxMetadata)
+	if err != nil || !bytes.Equal(unsealed, current) {
+		t.Fatal("orphan did not retain exact current private identity", err)
+	}
+	oldIDs, err := crypt.Identities(unsealed, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := s.Ciphertext("entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := crypt.Decrypt(ciphertext, oldIDs)
+	if err != nil || string(value) != "unchanged" {
+		t.Fatal("orphan recovery proof failed", err)
+	}
+	identity, err := s.IdentityShow()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := transactionFiles(t, s)
+	_, err = s.Rotate(true, "destroy-retired-key:"+identity.Fingerprint, false)
+	var failure *fault.Error
+	if !errors.As(err, &failure) || failure.Code != "identity.staging_present" || failure.Details["applied"] != false {
+		t.Fatal("destructive rotation ignored recoverable orphan keys", err)
+	}
+	if !reflect.DeepEqual(before, transactionFiles(t, s)) {
+		t.Fatal("refused retirement mutated store or orphan evidence")
 	}
 }
 

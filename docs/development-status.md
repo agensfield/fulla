@@ -1605,3 +1605,21 @@ limit fixtures preserve their evidence while reporting unhealthy. Doctor,
 cleanup and structural/deep checks passed under race (18.3s); CLI doctor/cleanup/
 panic checks and store/CLI vet passed. Automatic orphan ownership/cleanup and
 sibling full-restore staging discovery remain open; see journal-publication.md.
+
+### Destructive retirement refuses retained staging capsules (2026-09-06)
+
+A killed pre-journal rotation leaves a generated identity beside a sealed copy
+of the old private key. The Git/no-Git crash fixtures now unwrap that capsule,
+prove exact equality with the current key and decrypt an existing entry. A later
+destructive rotation must not imply that local retirement succeeded while this
+capsule remains. Fresh destructive rotation now checks staging before locking
+and again under lock; destructive recovery excludes only its validated own
+stage and refuses unrelated evidence. Refusals preserve the store and direct
+inspection through doctor, without guessing deletion authority.
+
+Two fresh and two recovery refusal cases pass. Disabling the guard causes all
+four to fail. Normal continuity/destruction and killed-owner destructive recovery
+with only owned staging still pass; the combined race group took 31.8s, with
+store vet/diff checks passing. This is a retirement-safety fix, not automatic
+orphan cleanup or isolation from same-user/external copies. See the retirement
+section of journal-publication.md for evidence and applied-state boundaries.
