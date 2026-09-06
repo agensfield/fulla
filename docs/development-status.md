@@ -2405,3 +2405,49 @@ Targeted recovery/restore race passed CLI 1.901s and store 37.875s, including fu
 restore confirmation, handled errors and killed-owner boundaries. Full CLI race
 passed (35.783s), followed by full vet. The full-spec acceptance matrix remains
 open; this checkpoint does not claim every channel or authority combination.
+
+
+### Fixed basic-write protocol for future metadata (2026-09-06)
+
+1f39f93 CI 34017880120 passed Linux/macOS. The next pass tackled the explicit v1
+compatibility gap rather than extending safer refusal: basic CRUD must continue
+with newer feature metadata. It now selects an isolated fixed basic-v1 protocol
+when the transaction version is newer. Staging, pending journals, encrypted
+snapshots and receipts live under .fulla/basic-v1; stage_id plus stage_protocol
+bind the shared lock. The existing hash-checked journal engine routes by its
+persisted snapshot_domain. No live pa-v1 or manifest-domain version changes.
+
+Only add/edit/move/remove use this protocol. Import and recovery features retain
+transaction-domain guards. The audit also found ordinary identity rotation could
+write upgradeable transaction staging without its own transaction guard; it now
+checks before private-key access, under the shared lock, and during completion.
+Basic recovery validates version, command, ID and protocol binding, preserves
+replacement ownership, and refuses competing feature journals without interpreting
+them. Diagnostics include fixed-protocol staging independently of feature parsing.
+
+Positive store tests cover Git/no-Git binary add, empty edit, move and remove with
+a future transaction domain and all domains newer, preserving opaque files and
+manifest bytes/modes. Four machine-mode journeys cover JSON/noninteractive stdin,
+inherited FD and raw/base64 retrieval. Missing-domain refusal tests keep the
+previous no-input/no-plugin guarantees; former future-version refusal is replaced
+by positive isolation evidence. The previous snapshot-domain source overlay fails
+all four positive store fixtures at add with metadata.unsupported.
+
+Ten native killed-owner cases cover five publication boundaries. Two additional
+writer/recovery subprocess cases force actual cleanup denial after validation,
+retain a replacement token/protocol, and complete via a later ordinary recovery.
+The initial denial fixture chmodded staging before validation and correctly failed
+there; moving the injected denial after validation tests the intended cleanup
+failure without weakening permission requirements. Seven reconstructed malformed
+protocol/journal/owner cases require unchanged-state refusal.
+
+The first full race/vet pass succeeded (store 521.287s, CLI 98.225s, remote
+109.130s). Additional targeted basic/rotation race passed (137.582s), CLI future
+CRUD passed (28.013s), and stage/refusal race passed (6.984s). A final full race/vet
+run includes the subsequent retry, refusal and rotation guards and passed:
+store 421.327s, CLI 125.852s, remote 112.828s, followed by full vet.
+See basic-write-protocol.md for schema, paths, test scope and rollback restrictions.
+Staging-aware 1f39f93 refuses future-domain bound recovery by source inspection;
+831caf6 lacks that binding check and is unsafe for recovering this new state.
+No native historical-binary claim, real domain transformation, release tag or
+live credential cutover is inferred from these fixtures.

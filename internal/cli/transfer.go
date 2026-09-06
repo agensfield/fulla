@@ -117,6 +117,9 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 		return nil, fault.Usage(p.Command + " requires one encrypted bundle path")
 	}
 	if p.Command == "transfer import" {
+		if err := s.RequireDomain("transactions"); err != nil {
+			return nil, err
+		}
 		if err := s.CheckMutationDomains(); err != nil {
 			return nil, err
 		}

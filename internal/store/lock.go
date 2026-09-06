@@ -10,11 +10,12 @@ import (
 )
 
 type Lock struct {
-	store      *Store
-	Token      string
-	StageID    string
-	releaseDir string
-	held       bool
+	store         *Store
+	Token         string
+	StageID       string
+	StageProtocol string
+	releaseDir    string
+	held          bool
 }
 
 func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation, s.Validate) }
@@ -23,15 +24,24 @@ func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation,
 // requesting input or decrypting. Repeat the check under the shared lock, and
 // leave mutate's publication-time check in place for long-lived callers.
 func (s *Store) lockMutation(operation string) (*Lock, error) {
-	if err := s.CheckMutationDomains(); err != nil {
+	if err := s.checkMutationCommand(operation); err != nil {
 		return nil, err
 	}
 	return s.lock(operation, func() error {
 		if err := s.Validate(); err != nil {
 			return err
 		}
-		return s.CheckMutationDomains()
+		return s.checkMutationCommand(operation)
 	})
+}
+
+func (s *Store) checkMutationCommand(operation string) error {
+	if !basicCommand(operation) {
+		if err := s.RequireDomain("transactions"); err != nil {
+			return err
+		}
+	}
+	return s.CheckMutationDomains()
 }
 
 // CheckMutationDomains lets callers refuse unavailable entry mutations before

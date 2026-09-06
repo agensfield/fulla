@@ -47,6 +47,9 @@ func (s *Store) Rotate(destroy bool, ack string, compromise bool) (RotationResul
 }
 
 func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(string) error) (result RotationResult, err error) {
+	if err := s.RequireDomain("transactions"); err != nil {
+		return result, err
+	}
 	if err := s.RequireDomain("identity"); err != nil {
 		return result, err
 	}
@@ -62,7 +65,15 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 			return result, err
 		}
 	}
-	lock, err := s.Lock("identity rotate")
+	lock, err := s.lock("identity rotate", func() error {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+		if err := s.RequireDomain("transactions"); err != nil {
+			return err
+		}
+		return s.RequireDomain("identity")
+	})
 	if err != nil {
 		return result, err
 	}
@@ -257,6 +268,12 @@ func (s *Store) rotationWrite(j *Rotation) error {
 }
 
 func (s *Store) finishRotation(j *Rotation, hook func(string) error) error {
+	if err := s.RequireDomain("transactions"); err != nil {
+		return err
+	}
+	if err := s.RequireDomain("identity"); err != nil {
+		return err
+	}
 	if j.Version != 1 || !validID(j.ID) || j.Retired != metadata+"/retired/"+j.ID+".age" {
 		return fault.New("identity.invalid_rotation", "invalid rotation journal")
 	}

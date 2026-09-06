@@ -22,6 +22,7 @@ type LockInfo struct {
 	Operation      string `json:"operation"`
 	PeerReceipt    string `json:"peer_receipt,omitempty"`
 	StageID        string `json:"stage_id,omitempty"`
+	StageProtocol  string `json:"stage_protocol,omitempty"`
 	AdoptionID     string `json:"adoption_id,omitempty"`
 	InitID         string `json:"init_id,omitempty"`
 	InitTarget     string `json:"init_target,omitempty"`
@@ -67,6 +68,11 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 				return nil, fault.New("store.lock_unknown", "invalid peer receipt binding")
 			}
 			info.PeerReceipt = value
+		case "stage_protocol":
+			if info.StageProtocol != "" || value != basicProtocol {
+				return nil, fault.New("store.lock_unknown", "unsupported staging protocol")
+			}
+			info.StageProtocol = value
 		case "stage_id":
 			if info.StageID != "" || !validID(value) {
 				return nil, fault.New("store.lock_unknown", "invalid staging binding")
@@ -104,6 +110,9 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 			}
 			info.RestoreTarget = string(decoded)
 		}
+	}
+	if info.StageProtocol != "" && info.StageID == "" {
+		return nil, fault.New("store.lock_unknown", "staging protocol requires an owner binding")
 	}
 	if (info.RestoreID == "") != (info.RestoreTarget == "") || (info.RestoreID == "" && info.RestoreStoreID != "") || (info.RestoreID != "" && (info.InitID != "" || info.StageID != "" || info.AdoptionID != "" || info.PeerReceipt != "")) {
 		return nil, fault.New("store.lock_unknown", "conflicting restore binding")
@@ -175,6 +184,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if !info.Local || info.Alive {
 		return nil, fault.New("store.lock_active", "refusing live, remote, or unverifiable lock owner")
 	}
+	if err := s.validateStageProtocol(info); err != nil {
+		return nil, err
+	}
 	guard, err := s.Root.OpenFile("lock/recovery", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
@@ -212,7 +224,7 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if info.PeerReceipt != "" {
 		count++
 	}
-	for _, name := range []string{"pending.json", "rotation.json", "prune.json"} {
+	for _, name := range []string{"pending.json", "rotation.json", "prune.json", "basic-v1/pending.json"} {
 		// An unpublished archive's files are cleanup material, not live journals.
 		if info.RestoreID != "" && creationUnpublished {
 			break
@@ -226,7 +238,7 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if count > 1 {
 		return nil, fault.New("transaction.conflict", "multiple pending journals require inspection")
 	}
-	if err := s.validateStagingBinding(info.StageID); err != nil {
+	if err := s.validateStageProtocol(info); err != nil {
 		return nil, err
 	}
 	// Publish this invocation as owner before touching the journal. flock is
@@ -241,6 +253,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	}
 	if info.StageID != "" {
 		newInfo = strings.TrimSpace(newInfo) + " stage_id=" + info.StageID + "\n"
+	}
+	if info.StageProtocol != "" {
+		newInfo = strings.TrimSpace(newInfo) + " stage_protocol=" + info.StageProtocol + "\n"
 	}
 	if info.AdoptionID != "" {
 		newInfo = strings.TrimSpace(newInfo) + " adoption_id=" + info.AdoptionID + "\n"
@@ -268,6 +283,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	}
 	if info.AdoptionID != "" {
 		return s.recoverAdoption(info.AdoptionID, expected)
+	}
+	if info.StageProtocol == basicProtocol {
+		return s.recoverBasic(info, expected)
 	}
 	pruneData, pruneErr := securefs.Read(s.Root, metadata+"/prune.json", maxMetadata)
 	if pruneErr == nil {

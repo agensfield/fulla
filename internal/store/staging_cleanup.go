@@ -50,6 +50,13 @@ func (s *Store) validateStagingBinding(id string) error {
 // bindStaging durably associates the exclusively created, still-empty stage
 // with its lock before any private recovery material is written there.
 func (s *Store) bindStaging(lock *Lock, id string) error {
+	return s.bindStagingProtocol(lock, id, "")
+}
+
+func (s *Store) bindStagingProtocol(lock *Lock, id, protocol string) error {
+	if protocol != "" && protocol != basicProtocol {
+		return fault.New("transaction.invalid", "unknown staging protocol")
+	}
 	info, err := s.InspectLock()
 	if err != nil {
 		return err
@@ -61,9 +68,14 @@ func (s *Store) bindStaging(lock *Lock, id string) error {
 	if err != nil {
 		return err
 	}
-	published, err := securefs.ReplacePublished(s.Root, "lock/info", []byte(strings.TrimSpace(string(data))+" stage_id="+id+"\n"))
+	binding := " stage_id=" + id
+	if protocol != "" {
+		binding += " stage_protocol=" + protocol
+	}
+	published, err := securefs.ReplacePublished(s.Root, "lock/info", []byte(strings.TrimSpace(string(data))+binding+"\n"))
 	if published {
 		lock.StageID = id
+		lock.StageProtocol = protocol
 	}
 	return err
 }
@@ -75,7 +87,7 @@ func (s *Store) finishUnpublished(lock *Lock, dir string, original error) error 
 	var cleanupErr error
 	if dir != "" {
 		owner, err := s.InspectLock()
-		if err != nil || owner == nil || owner.Token != lock.Token || owner.StageID != lock.StageID || owner.PeerReceipt != "" {
+		if err != nil || owner == nil || owner.Token != lock.Token || owner.StageID != lock.StageID || owner.StageProtocol != lock.StageProtocol || owner.PeerReceipt != "" {
 			failure := unpublishedCleanupFailure(original)
 			failure.Details["staging_path"] = filepath.Join(s.Dir, dir)
 			failure.Details["staging_cleanup_required"] = true

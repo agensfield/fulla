@@ -26,7 +26,7 @@ func (s *Store) Backups() ([]Backup, error) {
 		return nil, err
 	}
 	backups := []Backup{}
-	for _, domain := range []string{"", "transactions"} {
+	for _, domain := range []string{"", "transactions", basicProtocol} {
 		items, err := s.snapshotBackups(domain)
 		if err != nil {
 			return nil, err
@@ -47,7 +47,7 @@ func (s *Store) Backups() ([]Backup, error) {
 func (s *Store) snapshotBackups(domain string) ([]Backup, error) {
 	base := snapshotBase(domain)
 	root, err := s.Root.OpenRoot(base)
-	if errors.Is(err, fs.ErrNotExist) && domain == "transactions" {
+	if errors.Is(err, fs.ErrNotExist) && domain != "" {
 		return nil, nil
 	}
 	if err != nil {

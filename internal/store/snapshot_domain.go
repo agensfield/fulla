@@ -7,16 +7,21 @@ import (
 	"github.com/agensfield/fulla/internal/fault"
 )
 
-// Transaction snapshots remain version-1 transaction data when a newer backup
-// feature domain is present. They never share that domain's directory. The
-// chosen domain is persisted in the journal before any live publication.
+// Basic writes use a fixed isolated protocol when transaction metadata is newer.
+// Otherwise, snapshots stay in the known transaction domain if backup is newer.
+// Persist the selected namespace before any live publication.
 func (s *Store) transactionSnapshotDomain() (string, error) {
-	if err := s.RequireDomain("transactions"); err != nil {
-		return "", err
-	}
-	version, err := s.domainVersion("backup")
+	version, err := s.domainVersion("transactions")
 	if err != nil {
 		return "", err
+	}
+	transactionVersion := version
+	version, err = s.domainVersion("backup")
+	if err != nil {
+		return "", err
+	}
+	if transactionVersion > 1 {
+		return basicProtocol, nil
 	}
 	if version > 1 {
 		return "transactions", nil
@@ -25,6 +30,9 @@ func (s *Store) transactionSnapshotDomain() (string, error) {
 }
 
 func snapshotBase(domain string) string {
+	if domain == basicProtocol {
+		return basicBase + "/backups"
+	}
 	if domain == "transactions" {
 		return metadata + "/transaction-backups"
 	}
@@ -33,6 +41,8 @@ func snapshotBase(domain string) string {
 
 func (s *Store) requireSnapshotDomain(domain string) error {
 	switch domain {
+	case basicProtocol:
+		return nil
 	case "":
 		return s.RequireDomain("backup")
 	case "transactions":
@@ -49,7 +59,7 @@ func (s *Store) snapshotLocation(id string) (string, string, error) {
 		return "", "", fault.Usage("invalid backup identifier")
 	}
 	found, domain := "", ""
-	for _, candidate := range []string{"", "transactions"} {
+	for _, candidate := range []string{"", "transactions", basicProtocol} {
 		location := snapshotBase(candidate) + "/" + id
 		info, err := s.Root.Lstat(location)
 		if errors.Is(err, fs.ErrNotExist) {

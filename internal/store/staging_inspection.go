@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"path"
 	"sort"
 	"strings"
@@ -14,10 +15,36 @@ import (
 // A path can belong to a live writer, pending recovery, or an interrupted
 // unpublished operation. A lock-free observation cannot establish ownership.
 func (s *Store) inspectStaging() ([]string, error) {
-	if err := s.RequireDomain("transactions"); err != nil {
+	paths, err := s.inspectStageDirectory(transactionBase(basicProtocol), true)
+	if err != nil {
 		return nil, err
 	}
-	dir, err := s.Root.Open(metadata + "/transactions")
+	if err := s.RequireDomain("transactions"); err != nil {
+		return paths, err
+	}
+	feature, err := s.inspectStageDirectory(metadata+"/transactions", false)
+	if err != nil {
+		return paths, err
+	}
+	paths = append(paths, feature...)
+	// Atomic key publication uses sibling files outside transaction staging.
+	// A killed writer can leave plaintext identities or sealed retired keys here.
+	for _, directory := range []string{".", metadata + "/retired"} {
+		atomic, err := s.inspectAtomicKeyStaging(directory)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, atomic...)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func (s *Store) inspectStageDirectory(directory string, optional bool) ([]string, error) {
+	dir, err := s.Root.Open(directory)
+	if optional && errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -34,16 +61,7 @@ func (s *Store) inspectStaging() ([]string, error) {
 		if !entry.IsDir() || !validID(entry.Name()) {
 			return nil, fault.New("transaction.invalid_staging", "unexpected transaction staging path")
 		}
-		paths = append(paths, metadata+"/transactions/"+entry.Name())
-	}
-	// Atomic key publication uses sibling files outside transaction staging.
-	// A killed writer can leave plaintext identities or sealed retired keys here.
-	for _, directory := range []string{".", metadata + "/retired"} {
-		atomic, err := s.inspectAtomicKeyStaging(directory)
-		if err != nil {
-			return nil, err
-		}
-		paths = append(paths, atomic...)
+		paths = append(paths, directory+"/"+entry.Name())
 	}
 	sort.Strings(paths)
 	return paths, nil

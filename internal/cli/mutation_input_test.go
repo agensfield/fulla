@@ -38,14 +38,14 @@ func TestUnsupportedMutationLeavesSelectedInputUntouched(t *testing.T) {
 			if err := os.WriteFile(secret, []byte("synthetic secret input never consumed"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			for _, domain := range []string{"future-transactions", "missing-backup"} {
+			for _, domain := range []string{"missing-transactions", "missing-backup"} {
 				next := s.Meta
 				next.Domains = map[string]int{}
 				for name, version := range s.Meta.Domains {
 					next.Domains[name] = version
 				}
-				if domain == "future-transactions" {
-					next.Domains["transactions"] = 2
+				if domain == "missing-transactions" {
+					delete(next.Domains, "transactions")
 				} else {
 					delete(next.Domains, "backup")
 				}

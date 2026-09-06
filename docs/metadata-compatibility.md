@@ -19,10 +19,11 @@ records; they do not fabricate or silently rewrite a predecessor format.
 | Sync | Basic local CRUD remains independent of sync state. | Sync and activation refuse, including open remote sessions. |
 | Backup | CRUD retains encrypted snapshots in the understood transaction domain. | Backup listing, restoration, pruning, and full export refuse unknown backup metadata. |
 | Identity | Live keys still use pa-v1; basic CRUD does not interpret retired identity records. | Identity lifecycle and historical-key recovery refuse unknown identity metadata. |
-| Transactions | Unlocked live reads remain possible. | Mutations and transaction recovery currently require version 1. A wider safe-write policy for a future transaction protocol is unresolved. |
+| Transactions | Basic CRUD uses the fixed isolated [basic-v1 protocol](basic-write-protocol.md). | Feature operations and feature-journal recovery refuse unsupported transaction metadata. Explicit basic recovery uses its fixed codec and binding. |
 
-The last row remains a compatibility limitation, not a waiver of the locked
-older-binary CRUD contract. No released metadata upgrade is introduced here.
+The fixed basic protocol establishes the v1 CRUD boundary without interpreting
+newer feature files. It is not a domain migration; older development builds do
+not gain this capability retroactively. No released metadata upgrade is introduced here.
 
 ## Transaction snapshots with a newer backup domain
 
@@ -81,7 +82,7 @@ preservation, killed publication/commit/receipt phases, destination binding,
 restore/prune, duplicate-location refusal, and historical-binary recovery refusal.
 
 The full acceptance matrix still tracks domain-upgrade transformations and their
-interruption boundaries, future transaction-domain writes, and release/stable
+interruption boundaries, released rolling-upgrade evidence, and release/stable
 operational gates. This policy does not declare those complete.
 
 ## Additive staging ownership in lock records
@@ -163,13 +164,15 @@ Entry mutations now check transaction and snapshot-domain eligibility before
 acquiring their lock, repeat it during locked validation, and retain the existing
 publication-time check. Add/edit (including input callbacks), remove/move,
 history restore, backup restore and logical import use this shared boundary.
-An unsupported transaction domain or invalid backup declaration therefore cannot
-cause these store operations to decrypt first and only then refuse publication.
-Newer, well-formed backup domains still use transaction-owned snapshots.
+Missing/malformed transaction or backup declarations cannot cause these store
+operations to decrypt first and only then refuse publication. Basic CRUD with a
+newer transaction domain now uses the fixed basic-v1 protocol; non-basic feature
+mutations still refuse that domain. Newer, well-formed backup domains use
+transaction-owned snapshots when the transaction domain is understood.
 
 `mutation_preflight_test.go` uses real encrypted entries/bundles and a sole plugin
 identity with a positively controlled invocation sentinel. Git/no-Git cases cover
-future transactions and a missing backup declaration, assert typed refusal,
+missing transaction and backup declarations, assert typed refusal,
 no plugin/input/confirmation invocation, and unchanged paths, modes and bytes.
 A previous-source overlay makes interactive edit attempt decryption and fail the
 regression. Existing future-backup CRUD/snapshot cases remain positive coverage.
@@ -183,14 +186,15 @@ previous-CLI overlay consumes/closes the import passphrase descriptor and fails
 the regression. Store locked/publication checks remain authoritative.
 
 These selected channels are bounded evidence, not every possible CLI input or
-racing state change. Future transaction-domain writes and real domain migrations
-remain unresolved.
+racing state change. Real domain migrations remain unresolved; fixed-protocol
+future transaction-domain CRUD has its separate positive and crash evidence.
 
 
 ## Domain-upgrade applicability audit
 
 [The domain-upgrade audit](domain-upgrade-audit.md) separates the absence of a
-real predecessor domain version from the actual future-transaction CRUD gap.
+real predecessor domain version from the original future-transaction CRUD gap,
+now addressed by the fixed basic protocol.
 It maps shared journal/staging/lock ownership and explains why removing a guard
 or relocating snapshots alone is unsafe. Transformation-fixture applicability
 has been returned to Arda as a product-scope question; no gate is waived.

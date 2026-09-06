@@ -60,15 +60,15 @@ func TestMutationDomainsRefuseBeforeSecretAccess(t *testing.T) {
 			if err := os.Remove(marker); err != nil {
 				t.Fatal(err)
 			}
-			for _, domain := range []string{"future-transactions", "missing-backup"} {
+			for _, domain := range []string{"missing-transactions", "missing-backup"} {
 				t.Run(domain, func(t *testing.T) {
 					next := s.Meta
 					next.Domains = map[string]int{}
 					for name, version := range s.Meta.Domains {
 						next.Domains[name] = version
 					}
-					if domain == "future-transactions" {
-						next.Domains["transactions"] = 2
+					if domain == "missing-transactions" {
+						delete(next.Domains, "transactions")
 					} else {
 						delete(next.Domains, "backup")
 					}

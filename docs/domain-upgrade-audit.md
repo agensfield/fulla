@@ -1,6 +1,9 @@
 # Domain upgrade applicability and write compatibility
 
-Status: unresolved contract decisions, audited at `f611f22`, 2026-09-06.
+Status: transformation-fixture applicability remains unresolved, 2026-09-06.
+The historical audit below was made at `f611f22`. Its basic-write gap is now
+addressed by the [fixed isolated basic-v1 protocol](basic-write-protocol.md);
+the original diagnosis is retained to explain why the guard alone was insufficient.
 This record does not waive the locked specification or claim migration acceptance.
 
 ## Real predecessor evidence

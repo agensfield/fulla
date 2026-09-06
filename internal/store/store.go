@@ -331,7 +331,7 @@ func (s *Store) Unlocked() error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	for _, pending := range []string{"pending.json", "rotation.json", "prune.json"} {
+	for _, pending := range []string{"pending.json", "rotation.json", "prune.json", "basic-v1/pending.json"} {
 		if _, err := s.Root.Lstat(metadata + "/" + pending); err == nil {
 			return fault.New("transaction.pending", "explicit transaction recovery is required")
 		} else if !errors.Is(err, fs.ErrNotExist) {

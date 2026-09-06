@@ -50,6 +50,10 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		_ = lock.Release()
 		return result, err
 	}
+	if snapshotDomain == basicProtocol && !basicCommand(command) {
+		_ = lock.Release()
+		return result, fault.New("metadata.unsupported", "newer transaction metadata supports only basic entry operations")
+	}
 	prospective := make([]string, 0, len(values))
 	for name := range values {
 		prospective = append(prospective, name)
@@ -68,7 +72,13 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		return result, err
 	}
 	id := securefs.ID()
-	dir := metadata + "/transactions/" + id
+	if snapshotDomain == basicProtocol {
+		if err := s.prepareBasicProtocol(); err != nil {
+			_ = lock.Release()
+			return result, err
+		}
+	}
+	dir := transactionBase(snapshotDomain) + "/" + id
 	pending := false
 	ownedStage := ""
 	defer func() {
@@ -80,7 +90,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		return result, err
 	}
 	ownedStage = dir
-	if err := s.bindStaging(lock, id); err != nil {
+	if err := s.bindStagingProtocol(lock, id, stageProtocol(snapshotDomain)); err != nil {
 		return result, err
 	}
 	for _, sub := range []string{"before", "after"} {
@@ -144,7 +154,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 	if err := securefs.WriteNew(s.Root, dir+"/journal.json", data); err != nil {
 		return result, err
 	}
-	pending, err = securefs.PublishNewPublished(s.Root, metadata+"/pending.json", data)
+	pending, err = securefs.PublishNewPublished(s.Root, journalPath(snapshotDomain), data)
 	if pending && err == nil && hook != nil {
 		err = hook("journaled")
 	}
@@ -154,7 +164,7 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		}
 		return result, err
 	}
-	result = MutationResult{Transaction: id, Names: names, Receipt: metadata + "/receipts/" + id + ".json", Backup: snapshotBase(snapshotDomain) + "/" + id}
+	result = MutationResult{Transaction: id, Names: names, Receipt: receiptBase(snapshotDomain) + "/" + id + ".json", Backup: snapshotBase(snapshotDomain) + "/" + id}
 	if err := s.finishJournal(&j, hook); err != nil {
 		return result, fault.Applied("transaction requires explicit recovery; shared lock retained", id)
 	}
@@ -181,10 +191,18 @@ func (s *Store) journalWrite(j *Journal) error {
 	if err != nil {
 		return err
 	}
-	return securefs.Replace(s.Root, metadata+"/pending.json", data)
+	return securefs.Replace(s.Root, journalPath(j.SnapshotDomain), data)
 }
 
 func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
+	if j.SnapshotDomain != basicProtocol {
+		if err := s.RequireDomain("transactions"); err != nil {
+			return err
+		}
+	}
+	if j.SnapshotDomain == basicProtocol && !basicCommand(j.Command) {
+		return fault.New("transaction.invalid", "unsupported basic operation")
+	}
 	if err := s.requireSnapshotDomain(j.SnapshotDomain); err != nil {
 		return err
 	}
@@ -194,7 +212,7 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 	if j.Phase != "prepared" && j.Phase != "published" && j.Phase != "committed" {
 		return fault.New("transaction.invalid", "unknown journal phase")
 	}
-	dir := metadata + "/transactions/" + j.ID
+	dir := transactionBase(j.SnapshotDomain) + "/" + j.ID
 	if j.Phase == "prepared" {
 		// Validate all old/new hashes before publishing the first path. A retry
 		// accepts only old or staged-new state, never unrelated external edits.
@@ -365,7 +383,7 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 	} else if err != nil {
 		return err
 	}
-	receipt := metadata + "/receipts/" + j.ID + ".json"
+	receipt := receiptBase(j.SnapshotDomain) + "/" + j.ID + ".json"
 	data, err := json.Marshal(j)
 	if err != nil {
 		return err
@@ -382,10 +400,10 @@ func (s *Store) finishJournal(j *Journal, hook func(string) error) error {
 			return err
 		}
 	}
-	if err := s.Root.Remove(metadata + "/pending.json"); err != nil {
+	if err := s.Root.Remove(journalPath(j.SnapshotDomain)); err != nil {
 		return err
 	}
-	if err := securefs.SyncDir(s.Root, metadata); err != nil {
+	if err := securefs.SyncDir(s.Root, path.Dir(journalPath(j.SnapshotDomain))); err != nil {
 		return err
 	}
 	return s.Root.RemoveAll(dir)
