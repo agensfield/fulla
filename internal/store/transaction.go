@@ -45,10 +45,6 @@ func digest(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToS
 // already encrypted; nil means deletion, never an empty plaintext value.
 // hook is an internal failure-injection seam, never a user environment switch.
 func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hook func(string) error) (result MutationResult, err error) {
-	if err := s.RequireDomain("transactions"); err != nil {
-		_ = lock.Release()
-		return result, err
-	}
 	snapshotDomain, err := s.transactionSnapshotDomain()
 	if err != nil {
 		_ = lock.Release()

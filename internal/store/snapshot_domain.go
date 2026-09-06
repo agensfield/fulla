@@ -11,6 +11,9 @@ import (
 // feature domain is present. They never share that domain's directory. The
 // chosen domain is persisted in the journal before any live publication.
 func (s *Store) transactionSnapshotDomain() (string, error) {
+	if err := s.RequireDomain("transactions"); err != nil {
+		return "", err
+	}
 	version, err := s.domainVersion("backup")
 	if err != nil {
 		return "", err

@@ -156,3 +156,24 @@ Recover. Existing SIGKILL adoption cases remain separate evidence. A negative
 overlay dropping adoption_id during takeover fails the retained-binding check.
 This proves unpublished-stage failure/retry, not post-publication lock-release
 retry, arbitrary unsafe-mode repair or physical power-loss durability.
+
+## Mutation eligibility before secret access
+
+Entry mutations now check transaction and snapshot-domain eligibility before
+acquiring their lock, repeat it during locked validation, and retain the existing
+publication-time check. Add/edit (including input callbacks), remove/move,
+history restore, backup restore and logical import use this shared boundary.
+An unsupported transaction domain or invalid backup declaration therefore cannot
+cause these store operations to decrypt first and only then refuse publication.
+Newer, well-formed backup domains still use transaction-owned snapshots.
+
+`mutation_preflight_test.go` uses real encrypted entries/bundles and a sole plugin
+identity with a positively controlled invocation sentinel. Git/no-Git cases cover
+future transactions and a missing backup declaration, assert typed refusal,
+no plugin/input/confirmation invocation, and unchanged paths, modes and bytes.
+A previous-source overlay makes interactive edit attempt decryption and fail the
+regression. Existing future-backup CRUD/snapshot cases remain positive coverage.
+
+This is a store-operation boundary. It does not prove that every CLI input channel
+is untouched before entering the store API, and it does not solve future
+transaction-domain writes or introduce a metadata migration.

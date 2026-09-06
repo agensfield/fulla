@@ -280,7 +280,7 @@ func VerifyLogical(ciphertext []byte, identities []age.Identity) (TransferResult
 func (s *Store) ImportLogical(ciphertext []byte, identities []age.Identity) (result TransferResult, err error) {
 	result.Names = []string{}
 	result.Skipped = []string{}
-	lock, err := s.Lock("transfer import")
+	lock, err := s.lockMutation("transfer import")
 	if err != nil {
 		return result, err
 	}

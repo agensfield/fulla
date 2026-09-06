@@ -21,6 +21,22 @@ type Lock struct {
 
 func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation, s.Validate) }
 
+// Entry mutations must know how to journal and retain their snapshots before
+// requesting input or decrypting. Repeat the check under the shared lock, and
+// leave mutate's publication-time check in place for long-lived callers.
+func (s *Store) lockMutation(operation string) (*Lock, error) {
+	if _, err := s.transactionSnapshotDomain(); err != nil {
+		return nil, err
+	}
+	return s.lock(operation, func() error {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+		_, err := s.transactionSnapshotDomain()
+		return err
+	})
+}
+
 func (s *Store) lock(operation string, validate func() error) (*Lock, error) {
 	if err := s.Unlocked(); err != nil {
 		return nil, err

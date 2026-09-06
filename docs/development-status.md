@@ -2138,3 +2138,33 @@ CLI 77.499s, remote 93.446s), followed by full-project vet. The Linux/amd64
 securefs test binary also cross-compiled; native Linux execution remains CI. No journal/domain version or live store was changed.
 See rotation-publication.md and the updated private-copy audit for ownership,
 retry, compatibility and remaining legacy/init/restore cleanup boundaries.
+
+
+## 2026-09-06: Refuse unsupported entry mutations before secret access
+
+Found transaction/snapshot eligibility was checked only inside mutate, after
+interactive input, plugin decryption and restore/import processing. Entry writes,
+remove/move, history restore, backup restore and logical import now share an
+early eligibility check, repeated during locked validation; publication retains
+its check. The existing future-backup transaction-snapshot policy is preserved.
+No persistent format or version changes.
+
+Git/no-Git regression coverage uses real ciphertext/bundles, a sole plugin
+identity with a successful invocation positive control, input/confirmation
+sentinels and whole-tree paths/modes/digests. All 34 refusal cases pass for future
+transactions and missing backup metadata. Combined targeted race tests, including
+positive future-backup CRUD and existing recovery guards, passed in 14.099s.
+A previous-source overlay makes interactive edit decrypt first and fail with
+crypto.decrypt_failed instead of metadata.unsupported, detecting the ordering bug.
+
+The first full-suite command discovered negative-control .go files under ignored
+dist and failed to compile that accidental package. Those reference copies were
+renamed .go.txt; production packages passed that run (store 325.423s, CLI 77.759s,
+remote 93.306s). The subsequent clean full race-suite invocation passed using those successful
+package results, followed by another successful full vet. This fixture-layout mistake is separate from product or
+hosted CI behavior. Rotation predecessor aab03b3 passed Linux/macOS CI 34011043567.
+
+See metadata-compatibility.md for exact scope: store API preflight is not proof
+of every CLI channel, and future transaction writes/domain migrations remain open.
+The no-Git irreversible-delete versus retained-backup conflict was returned to
+Arda for a product decision; no retention policy was changed.

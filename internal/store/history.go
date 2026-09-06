@@ -105,7 +105,7 @@ func (s *Store) HistoryRestoreConfirmed(ref, name string, confirm func(HistoryRe
 	if _, err := EntryPath(name); err != nil {
 		return result, err
 	}
-	lock, err := s.Lock("history restore")
+	lock, err := s.lockMutation("history restore")
 	if err != nil {
 		return result, err
 	}

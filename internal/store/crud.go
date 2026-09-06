@@ -28,7 +28,7 @@ func (s *Store) write(name string, value []byte, edit bool, input func([]byte) (
 	if edit {
 		command = "edit"
 	}
-	lock, err := s.Lock(command)
+	lock, err := s.lockMutation(command)
 	if err != nil {
 		return result, err
 	}
@@ -95,7 +95,7 @@ func (s *Store) Remove(name string, permanent bool) (MutationResult, error) {
 	if _, err := EntryPath(name); err != nil {
 		return result, err
 	}
-	lock, err := s.Lock("remove")
+	lock, err := s.lockMutation("remove")
 	if err != nil {
 		return result, err
 	}
@@ -127,7 +127,7 @@ func (s *Store) Move(from, to string) (MutationResult, error) {
 			return result, err
 		}
 	}
-	lock, err := s.Lock("move")
+	lock, err := s.lockMutation("move")
 	if err != nil {
 		return result, err
 	}

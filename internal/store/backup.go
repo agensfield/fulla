@@ -142,7 +142,7 @@ func (s *Store) BackupRestoreConfirmed(id, phase string, confirm func(BackupRest
 	if phase != "before" && phase != "after" {
 		return result, fault.Usage("backup phase must be before or after")
 	}
-	lock, err := s.Lock("backup restore")
+	lock, err := s.lockMutation("backup restore")
 	if err != nil {
 		return result, err
 	}
