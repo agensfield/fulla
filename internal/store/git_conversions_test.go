@@ -37,8 +37,12 @@ func TestGitFilterRefusedBeforeExecutionOrPublication(t *testing.T) {
 			if err := securefs.WriteNew(s.Root, "passwords/.git/info/attributes", []byte("entry.age filter=fixture\n")); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.Write("entry", []byte("replacement"), existing); err == nil {
+			called := false
+			if _, err := s.WriteInteractive("entry", existing, func([]byte) ([]byte, error) { called = true; return []byte("replacement"), nil }); err == nil {
 				t.Fatal("accepted ciphertext conversion")
+			}
+			if called {
+				t.Fatal("conversion refusal requested secret input")
 			}
 			if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
 				t.Fatal("Git executed a clean filter", err)

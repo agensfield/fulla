@@ -2187,3 +2187,24 @@ Targeted CLI race passed (4.183s); full CLI/remote race passed (56.701s / 61.187
 scoped store domain/refusal/positive future-backup cases passed (14.610s), and
 full-project vet passed. Other channel/configuration ordering, domain migrations,
 unbound staging and release work remain open. No live credentials were used.
+
+
+## 2026-09-06: Shared write preflight includes prospective Git paths
+
+Found that CleanGit checks current entry paths, so a conversion rule matching
+only a prospective new entry was refused at publication after secret input and
+crypto processing. Store.CheckWrite now consolidates existence/domain checks,
+prospective-path conversion checks and clean Git state. CLI input selection and
+locked add/edit both use it; publication-time checks remain. This also removes
+duplicated CLI/store existence checking logic.
+
+Store filter fixtures now assert zero input callback invocation for new/existing
+entries alongside no filter execution, publication or history/backup changes.
+Eight JSON/noninteractive CLI stdin/FD cases cover prospective-only conversion
+and dirty Git refusal with untouched inputs and unchanged files/modes. Separate
+previous-source overlays fail the store callback and CLI descriptor checks.
+Targeted store/CLI race tests passed (5.966s / 5.931s). Full race passed (store
+327.251s, CLI 88.016s, remote 95.642s), followed by full vet. Predecessor CI runs
+34011712035 (1023e29) and 34011904420 (2bdd162) both passed Linux/macOS; the slower
+macOS run advanced normally and needed no rerun. No persisted format or live
+credential changes. See git-routing.md for scope and remaining broader audit.

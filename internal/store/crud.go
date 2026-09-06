@@ -9,6 +9,29 @@ func (s *Store) Write(name string, value []byte, edit bool) (MutationResult, err
 	return s.write(name, value, edit, nil)
 }
 
+// CheckWrite is advisory before input selection; write repeats it under its
+// lock. Include the prospective path, which CleanGit's existing inventory lacks.
+func (s *Store) CheckWrite(name string, edit bool) error {
+	exists, err := s.Exists(name)
+	if err != nil {
+		return err
+	}
+	if exists && !edit {
+		return fault.New("entry.exists", "entry already exists; use edit")
+	}
+	if !exists && edit {
+		return fault.New("entry.not_found", "entry does not exist; use add")
+	}
+	if err := s.CheckMutationDomains(); err != nil {
+		return err
+	}
+	if err := s.checkGitConversions([]string{name}); err != nil {
+		return err
+	}
+	_, err = s.CleanGit()
+	return err
+}
+
 // WriteInteractive holds the shared lock while obtaining input. For edits the
 // callback receives the exact current value, so an editor cannot overwrite a
 // concurrent cooperating writer's change.
@@ -32,20 +55,7 @@ func (s *Store) write(name string, value []byte, edit bool, input func([]byte) (
 	if err != nil {
 		return result, err
 	}
-	exists, err := s.Exists(name)
-	if err != nil {
-		_ = lock.Release()
-		return result, err
-	}
-	if exists && !edit {
-		_ = lock.Release()
-		return result, fault.New("entry.exists", "entry already exists; use edit")
-	}
-	if !exists && edit {
-		_ = lock.Release()
-		return result, fault.New("entry.not_found", "entry does not exist; use add")
-	}
-	if _, err := s.CleanGit(); err != nil {
+	if err := s.CheckWrite(name, edit); err != nil {
 		_ = lock.Release()
 		return result, err
 	}

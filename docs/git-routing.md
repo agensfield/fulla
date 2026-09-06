@@ -59,3 +59,22 @@ producer that ignores pipe errors and remains alive, actual termination/reaping,
 no partial output or store changes, and restoration of a historical value larger
 than the metadata limit. A negative overlay omitting cancellation makes the
 subprocess watchdog fail; it cleans only the fixture's own process group.
+
+
+## Write eligibility before input
+
+Add/edit share `Store.CheckWrite` between CLI preflight and the locked store
+operation. It checks entry existence, mutation domains, conversion attributes for
+the prospective destination and clean Git state before collecting input or
+opening an editor. `CleanGit` alone covers only the current inventory, so a rule
+such as `new.age text` was previously detected only after the new secret had been
+collected and encrypted. The publication-time conversion check remains in place.
+
+Store regression coverage now asserts conversion refusal never calls the input
+callback, for both new and existing entries, in addition to no filter execution,
+no publication and preserved history/backups. Eight CLI JSON/noninteractive
+stdin/FD cases cover prospective-only conversion and dirty Git state, requiring
+untouched input and unchanged fixture paths/modes/bytes. Previous store and CLI
+source overlays independently fail the callback and descriptor assertions.
+These are advisory early checks followed by locked validation, not authorization
+for a future raced write or a proof of every Git/configuration input boundary.
