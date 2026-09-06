@@ -1732,3 +1732,19 @@ both platforms in run 34003056161. The clipboard receipt now distinguishes the
 ambient-environment sentinel checked by fake utilities from real utilities,
 where that sentinel is not instrumented. No universal compositor or atomic
 compare-and-clear guarantee is inferred.
+
+### Combined scoped infrastructure recovery (2026-09-06)
+
+Reconciled J8 with the canonical August 30 decision: it requires an explicit
+chosen infrastructure inventory, not predetermined credential names or live
+revocation. The new Git/no-Git CLI journey exercises selected-only export and
+receipt, private artifact mode, source inventory preservation, verification
+against a nonexistent store, circular full-protection refusal, whole-archive
+substitution refusal and exact isolated recovery. Values and names are synthetic.
+The source export adds only its documented receipt; verification is read-only.
+
+The full CLI race suite passed, followed by the final expanded journey under
+race and CLI vet. An ignored-selector source overlay fails both variants, proving
+the acceptance detects whole-store scope bypass. See scoped-recovery.md for the
+exact proof and limits. This does not produce an offline copy of live Agensfield
+credentials or authorize changes to its automation credentials.
