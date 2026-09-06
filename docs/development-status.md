@@ -1970,3 +1970,19 @@ directory failures stop at the first error. A negative overlay omitting file
 synchronization fails the inventory/order assertions. Targeted initialization,
 adoption and restore race tests pass (15.387s), as does vet. This is explicit
 syscall ordering and error handling, not physical power-loss or disk-cache proof.
+
+### Public exact-commit Go installation (2026-09-06)
+
+Added an explicit public-network installation harness. It resolves Fulla's public
+module at a full Git ID, verifies origin/hash, installs with fresh Go caches and
+private HOME/GOPATH/GOBIN, checks installed module build info/checksum and CLI
+version, then exercises no-Git initialization, binary stdin add, exact raw/base64
+show and deep doctor. Native macOS/arm64 Go 1.26.0 acceptance passed for public
+658573e, reporting v0.0.0-20260906024722-658573e982ad and CLI 0.1.0-dev.
+The exact receipt hashes and repeatable command are in distribution.md.
+
+Ruff and basedpyright pass without warnings. No local executable, normal Go
+cache, shell configuration, tap, release or real store was changed. This closes
+a development-commit installation evidence gap while tagged release, Linux
+installation and Homebrew acceptance remain open. Public-network lookup is an
+explicit acceptance command, not a new mandatory CI dependency for every commit.

@@ -34,6 +34,38 @@ CI compares two package builds and validates every checksum, archive member,
 platform build setting, source provenance, and native executable version. It
 extracts only the native binary for execution into a disposable directory.
 
+## Public Go installation acceptance
+
+Verify a reviewed public commit independently of the local checkout:
+
+```sh
+FULLA_GO_BINARY="$(GOTOOLCHAIN=go1.26.0 go env GOROOT)/bin/go"
+python3 scripts/acceptance-go-install.py "$EXPECTED_COMMIT" 0.1.0-dev "$FULLA_GO_BINARY"
+```
+
+Use the expected CLI version for that commit. The harness resolves the public
+module at the complete Git ID and checks Go's origin URL/hash. It runs `go install
+MODULE@COMMIT` with fresh module/build caches, a temporary HOME/GOPATH/GOBIN,
+explicit public proxy/checksum database and disabled Git credential prompting.
+It verifies installed build-info module/version/checksum and CLI version, then
+runs no-Git initialization, binary stdin add, exact raw/base64 show and deep
+doctor on a disposable store. All installation and fixture paths are removed
+when the harness exits. The ordinary user binary, Go caches, shell environment
+and credentials are not changed.
+
+The native macOS/arm64 run at `658573e982ade72bd269dd837a9def5778bab280`
+passed with Go 1.26.0, module version
+`v0.0.0-20260906024722-658573e982ad`, CLI `0.1.0-dev` and module checksum
+`h1:lkg2ua4dh56o5s+8dqWWvFjTM0t/jAQ4ktSZ5UmiSZ8=`. Its observed binary SHA256 was
+`b4dff3a8b91357cd172d07eac66a0601fb75eed130fa68103b5027a1b4a42ee8`.
+That hash identifies this installation, not a reproducibility promise across
+arbitrary Go environments. This is public development-commit installation
+proof, not a tagged release, attestation verification, Homebrew installation or
+cross-platform installation acceptance. Run it again against the accepted tag
+commit/version as part of release closure. It is deliberately an explicit
+network acceptance command rather than a required public-index lookup on every
+CI commit.
+
 ## Tag-gated publication
 
 `.github/workflows/release.yml` handles `v*` tag pushes only in
