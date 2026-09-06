@@ -206,7 +206,10 @@ func TestPeerSavePublicationAndRotationReceipts(t *testing.T) {
 				next := original
 				next.Recipient = recipient
 				next.Fingerprint = crypt.Fingerprint(recipient)
-				err = s.savePeer(next, replace, original.Fingerprint, func() error {
+				err = s.savePeer(next, replace, original.Fingerprint, func(phase string) error {
+					if phase != "published" {
+						return nil
+					}
 					switch failure {
 					case "finalization":
 						return errors.New("fixture finalization failure")

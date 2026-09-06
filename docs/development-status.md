@@ -2470,3 +2470,26 @@ require recovery from the independent prune journal and preservation of the
 newest snapshot. Targeted race passed (16.918s); store vet passed. A previous
 backup-enumerator source overlay fails both Git/no-Git lifecycle fixtures with
 "basic snapshots missing". No runtime behavior or release gate was weakened.
+
+## Peer prepared and finalized receipt boundaries (2026-09-06)
+
+The J9 operation inventory now maps state-changing workflows to their publication
+mechanisms, existing native evidence and concrete remaining boundaries. Peer
+rotation/removal lacked killed-process acceptance before live pin publication and
+after applied receipt finalization. The internal fixture hook now names prepared,
+published and receipted boundaries; public methods pass nil and persisted formats
+are unchanged. Existing post-publication error injection remains at that phase.
+
+The native peer matrix now has 20 Git/no-Git cases, eight new. Prepared recovery
+preserves the old peer and records aborted; published/receipted recovery preserves
+the new state and records applied. Live-owner and wrong-token refusals, entry and
+identity preservation remain checked. Targeted race passed in 25.766s; broader
+peer/lock race passed in 30.853s, followed by store vet. A negative source overlay
+that misclassifies unchanged peers as applied fails the new prepared-rotation
+case with "lost reconciled peer evidence". The preceding documentation checkpoint
+68be834 has separate hosted CI; this paragraph is local evidence for the new work.
+
+Receipt creation before binding, atomic temporary-file windows and physical
+power-loss behavior are not proved by these tests. The inventory identifies
+external artifact publication versus internal export receipt as a concrete next
+acceptance target. No release tag or live credential cutover occurred.

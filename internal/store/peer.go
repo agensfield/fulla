@@ -147,8 +147,8 @@ func (s *Store) SavePeer(p Peer, replace bool, expected string) error {
 	return s.savePeer(p, replace, expected, nil)
 }
 
-// afterPublish injects fixture failures without exposing runtime switches.
-func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish func() error) (err error) {
+// hook exposes publication boundaries to fixtures, never runtime switches.
+func (s *Store) savePeer(p Peer, replace bool, expected string, hook func(string) error) (err error) {
 	if err := s.RequireDomain("peers"); err != nil {
 		return err
 	}
@@ -211,12 +211,17 @@ func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish fun
 		if err != nil {
 			return err
 		}
+		if hook != nil {
+			if err := hook("prepared"); err != nil {
+				return err
+			}
+		}
 		applied, err = securefs.ReplacePublished(s.Root, file, data)
 	} else {
 		applied, err = securefs.PublishNewPublished(s.Root, file, data)
 	}
-	if err == nil && afterPublish != nil {
-		err = afterPublish()
+	if err == nil && hook != nil {
+		err = hook("published")
 	}
 	if err != nil {
 		if applied {
@@ -229,6 +234,9 @@ func (s *Store) savePeer(p Peer, replace bool, expected string, afterPublish fun
 		if err := securefs.Replace(s.Root, receiptPath, receipt); err != nil {
 			return fault.Applied("peer rotated but receipt finalization failed", p.Name)
 		}
+		if hook != nil {
+			return hook("receipted")
+		}
 	}
 	return nil
 }
@@ -240,7 +248,7 @@ func (s *Store) RemovePeerConfirmed(name string, confirm func(Peer) error) error
 	return s.removePeerConfirmed(name, confirm, nil)
 }
 
-func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, afterPublish func() error) (err error) {
+func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, hook func(string) error) (err error) {
 	p, err := s.Peer(name)
 	if err != nil {
 		return err
@@ -286,6 +294,11 @@ func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, after
 	if err != nil {
 		return err
 	}
+	if hook != nil {
+		if err := hook("prepared"); err != nil {
+			return err
+		}
+	}
 	if err := s.Root.Remove(metadata + "/peers/" + name + ".json"); err != nil {
 		return err
 	}
@@ -293,14 +306,17 @@ func (s *Store) removePeerConfirmed(name string, confirm func(Peer) error, after
 	if err := securefs.SyncDir(s.Root, metadata+"/peers"); err != nil {
 		return fault.Applied("peer removed but directory synchronization failed", name)
 	}
-	if afterPublish != nil {
-		if err := afterPublish(); err != nil {
+	if hook != nil {
+		if err := hook("published"); err != nil {
 			return fault.Applied("peer removed but finalization failed", name)
 		}
 	}
 	data, _ = json.Marshal(map[string]any{"version": 1, "command": "peer remove", "previous": again, "phase": "applied"})
 	if err := securefs.Replace(s.Root, receipt, data); err != nil {
 		return fault.Applied("peer removed but receipt finalization failed", name)
+	}
+	if hook != nil {
+		return hook("receipted")
 	}
 	return nil
 }
