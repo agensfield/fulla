@@ -1936,3 +1936,19 @@ opening fail the killed-owner and public-CLI assertions respectively.
 The rebuilt native binary also passed pinned real shell-pa Git/no-Git adoption,
 exact bytes, alternating CRUD, shared locking, basic rollback and authenticated
 OpenSSH loopback sync with the new binding. No real user store was changed.
+
+### Adoption recovery cleanup failure and retry (2026-09-06)
+
+Added Git/no-Git real-subprocess recovery failure acceptance. A staged adoption
+fixture starts with a reaped local PID; the helper validates normally, then
+chmod-denies staging removal. Recovery takes ownership before reporting typed
+applied=false and exact staging/lock cleanup evidence. After helper exit its
+new dead token and adoption_id survive. Restoring the fixture-only mode allows
+ordinary recovery to reject the old token without mutation and complete with
+the new one, preserving the full live pa inventory/history and permitting
+explicit adoption retry. A negative overlay dropping the takeover binding fails.
+
+Initial lock-directory denial variants blocked owner publication itself rather
+than the intended post-takeover cleanup phase, and were removed from this scoped
+fixture. They are not counted as post-publication retry proof. Production code
+is unchanged; the new test verifies the actual persisted binding/retry contract.

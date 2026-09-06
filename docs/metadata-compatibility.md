@@ -138,3 +138,21 @@ Use a supporting Fulla binary for pending adoption recovery before rollback.
 Older development binaries may ignore the new field, cannot recover pre-adoption
 state through their CLI, and do not implement bound-stage cleanup. No actual
 released-binary migration or physical power-loss acceptance is claimed here.
+
+### Retry after failed adoption recovery
+
+A Git/no-Git fixture now denies staging removal after recovery validation using
+real chmod permissions. The recovery subprocess publishes its replacement
+owner, fails cleanup, emits applied=false and cleanup path/lock evidence, and
+exits. Its dead owner token differs from the initial token and still carries
+adoption_id. After restoring only the deliberately changed fixture mode,
+ordinary recovery rejects the old token without mutation, accepts the newly
+inspected token, removes the stage/lock and allows explicit adoption retry.
+Live pa paths/modes/digests and history are unchanged throughout recovery.
+
+The initial dead owner is a reconstructed fixture using an actually reaped PID;
+the failed recovery is a real subprocess, and the final retry calls ordinary
+Recover. Existing SIGKILL adoption cases remain separate evidence. A negative
+overlay dropping adoption_id during takeover fails the retained-binding check.
+This proves unpublished-stage failure/retry, not post-publication lock-release
+retry, arbitrary unsafe-mode repair or physical power-loss durability.
