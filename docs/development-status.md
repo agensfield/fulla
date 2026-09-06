@@ -2117,3 +2117,24 @@ followed by full-project vet. The new
 private-copy-audit.md records disk locations, material, ownership and remaining
 unbound init/restore/atomic staging. Predecessor CI runs 34010046371 and
 34009914035 passed on Linux/macOS. Migration and release gates remain open.
+
+
+## 2026-09-06: Rotation publishes from bound transaction staging
+
+Moved rotation publication copies into the already-bound transaction directory,
+retaining original after/ files for recovery validation. Copies are digest-checked
+on retry, atomically renamed with existing no-overwrite/replacement semantics,
+and both changed parent directories are synced (also on already-published retry).
+Added descriptor-based cross-parent no-replacement rename for Darwin/Linux.
+
+The initial targeted run failed because the old helper rejected multi-component
+names with "publication requires direct child names"; the new primitive takes
+only direct names and confined source/destination roots. Corrected targeted
+securefs/rotation tests passed (1.470s / 38.210s). Expanded real SIGKILL fixtures
+cover identity and sealed-key publication on Git/no-Git with continuity/destruction.
+A corrupted-copy refusal/retry test passed (2.438s); an overlay disabling its
+digest check fails the regression. Full Go 1.26.0 race passed (store 324.700s,
+CLI 77.499s, remote 93.446s), followed by full-project vet. The Linux/amd64
+securefs test binary also cross-compiled; native Linux execution remains CI. No journal/domain version or live store was changed.
+See rotation-publication.md and the updated private-copy audit for ownership,
+retry, compatibility and remaining legacy/init/restore cleanup boundaries.

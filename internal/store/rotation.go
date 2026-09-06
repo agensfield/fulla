@@ -308,17 +308,16 @@ func (s *Store) finishRotation(j *Rotation, hook func(string) error) error {
 		for _, c := range j.Changes {
 			oldData, err := securefs.Read(s.Root, c.Path, 65<<20)
 			if err == nil && digest(oldData) == c.After {
+				if err := s.syncRotationPublication(dir, c.Path); err != nil {
+					return err
+				}
 				continue
 			}
 			data, err := securefs.Read(s.Root, dir+"/after/"+c.Path, 65<<20)
 			if err != nil {
 				return err
 			}
-			if c.Before == "" {
-				err = securefs.PublishNew(s.Root, c.Path, data)
-			} else {
-				err = securefs.Replace(s.Root, c.Path, data)
-			}
+			err = s.publishRotationFile(dir, c, data, hook)
 			if err != nil {
 				return err
 			}

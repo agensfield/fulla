@@ -8,15 +8,26 @@ import (
 )
 
 func RenameNew(root *os.Root, from, to string) error {
-	if filepath.Base(from) != from || filepath.Base(to) != to {
+	return RenameNewBetween(root, from, root, to)
+}
+
+// RenameNewBetween atomically publishes between two already-confined parents.
+// Neither argument is interpreted as a path beneath its directory descriptor.
+func RenameNewBetween(fromRoot *os.Root, from string, toRoot *os.Root, to string) error {
+	if filepath.Base(from) != from || filepath.Base(to) != to || from == "." || from == ".." || to == "." || to == ".." {
 		return fmt.Errorf("publication requires direct child names")
 	}
-	f, err := root.Open(".")
+	source, err := fromRoot.Open(".")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return unix.RenameatxNp(int(f.Fd()), from, int(f.Fd()), to, unix.RENAME_EXCL)
+	defer source.Close()
+	destination, err := toRoot.Open(".")
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+	return unix.RenameatxNp(int(source.Fd()), from, int(destination.Fd()), to, unix.RENAME_EXCL)
 }
 
 func localFilesystem(root *os.Root) error {

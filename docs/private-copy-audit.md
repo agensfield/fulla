@@ -12,8 +12,9 @@ snapshots, swap, editor-managed files or another process sharing the Unix accoun
 | `.fulla/transactions/ID/after/identities` during rotation | New private identity | Bound-stage and journal recovery retain ownership evidence until staged removal and parent sync complete. Other transaction stages block destructive retirement. |
 | `.fulla/transactions/ID/after/.fulla/retired/ID.age` | Old identity sealed to the new identity | Destructive rotation removes its staged sealed copy as well as the published retired artifact; transaction staging is subsequently removed durably. |
 | `.fulla/retired/ID.age` | Sealed historical identity chain | Historical use is explicit. The selected destructive rotation removes its retired artifact; external copies cannot be revoked. |
-| Store-root `.fulla-stage-*` | Atomic replacement can hold a plaintext private identity before rename | No durable binding maps this file to its intended destination. Doctor reports the name; destructive rotation and recovery refuse while it remains. No automatic deletion. |
-| `.fulla/retired/.fulla-stage-*` | Atomic publication can hold a sealed retired identity before rename | Same diagnostic/refusal policy. A filename does not establish authority to erase the file. |
+| `.fulla/transactions/ID/publish-PATH_HASH` | Current rotation publication copy: private identity, sealed key or entry ciphertext | Owned by the existing journal/stage binding; original after/ data remains for retry. Atomic cross-parent rename publishes the copy; final owned-stage cleanup removes leftovers. |
+| Store-root `.fulla-stage-*` | Older atomic replacement can hold a plaintext private identity before rename | No durable binding maps this file to its intended destination. Doctor reports the name; destructive rotation and recovery refuse while it remains. No automatic deletion. |
+| `.fulla/retired/.fulla-stage-*` | Older atomic publication can hold a sealed retired identity before rename | Same diagnostic/refusal policy. A filename does not establish authority to erase the file. |
 | Parent `.fulla-init-ID` | Newly generated private identity and staged initial store | Handled cleanup is owned and reported. SIGKILL can leave an unbound sibling; there is no automatic recovery/delete authority. |
 | Parent `.fulla-restore-ID` | Restored private identities, retired artifacts and complete or partial archived store | Verified before publication; handled cleanup is owned. SIGKILL can leave an unbound sibling. Retry uses the original archive and does not delete an older sibling. |
 | Store `.fulla-adopt-ID` | Fulla metadata; adoption preserves existing live pa identity | Current writers bind the intended store ID into the shared lock. Recovery distinguishes unpublished stage cleanup from published metadata. Legacy unbound staging remains separate. |
@@ -49,6 +50,13 @@ recovery fixture requires the same refusal while preserving its own stage and
 journal. An old-inspection source overlay fails both diagnostics and recovery
 guard assertions. These are state fixtures, not a claim to reproduce an actual
 SIGKILL inside the securefs syscall window or storage power loss.
+
+## Current rotation publication
+
+[Owned publication](rotation-publication.md) now keeps new rotation publication
+copies inside the bound transaction directory and atomically renames them into
+their destinations. Both parent directories are synced. The prior root/retired
+atomic guard remains for older interrupted writers and unowned reserved files.
 
 ## Remaining work
 
