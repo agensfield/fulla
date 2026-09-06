@@ -21,6 +21,7 @@ type LockInfo struct {
 	Operation   string `json:"operation"`
 	PeerReceipt string `json:"peer_receipt,omitempty"`
 	StageID     string `json:"stage_id,omitempty"`
+	AdoptionID  string `json:"adoption_id,omitempty"`
 	PID         int    `json:"pid"`
 	Host        string `json:"host"`
 	Alive       bool   `json:"alive"`
@@ -65,9 +66,14 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 				return nil, fault.New("store.lock_unknown", "invalid staging binding")
 			}
 			info.StageID = value
+		case "adoption_id":
+			if info.AdoptionID != "" || !validID(value) {
+				return nil, fault.New("store.lock_unknown", "invalid adoption binding")
+			}
+			info.AdoptionID = value
 		}
 	}
-	if info.StageID != "" && info.PeerReceipt != "" {
+	if (info.StageID != "" && info.PeerReceipt != "") || (info.AdoptionID != "" && (info.StageID != "" || info.PeerReceipt != "")) {
 		return nil, fault.New("store.lock_unknown", "conflicting recovery bindings")
 	}
 	if info.PID <= 0 || info.Token == "" || info.Host == "" {
@@ -86,6 +92,17 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 }
 
 func (s *Store) Recover(expected string) (map[string]any, error) {
+	if _, err := s.Root.Lstat(metadata); errors.Is(err, fs.ErrNotExist) {
+		info, err := s.InspectLock()
+		if err != nil {
+			return nil, err
+		}
+		if info == nil || info.AdoptionID == "" {
+			return nil, fault.New("store.uninitialized", "unadopted recovery requires an explicit adoption binding")
+		}
+	} else if err != nil {
+		return nil, err
+	}
 	return s.recover(expected, s.Validate)
 }
 
@@ -125,6 +142,12 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	count := 0
+	if info.AdoptionID != "" {
+		count++
+		if _, err := s.adoptionPublished(info.AdoptionID); err != nil {
+			return nil, err
+		}
+	}
 	if info.PeerReceipt != "" {
 		count++
 	}
@@ -154,6 +177,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if info.StageID != "" {
 		newInfo = strings.TrimSpace(newInfo) + " stage_id=" + info.StageID + "\n"
 	}
+	if info.AdoptionID != "" {
+		newInfo = strings.TrimSpace(newInfo) + " adoption_id=" + info.AdoptionID + "\n"
+	}
 	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
 		return nil, err
 	}
@@ -162,6 +188,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	expected = newToken
+	if info.AdoptionID != "" {
+		return s.recoverAdoption(info.AdoptionID, expected)
+	}
 	pruneData, pruneErr := securefs.Read(s.Root, metadata+"/prune.json", maxMetadata)
 	if pruneErr == nil {
 		var j pruneJournal

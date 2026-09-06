@@ -99,3 +99,42 @@ staging remains inspection-only, including the empty-directory window between
 creation and binding. See [journal publication](journal-publication.md) for
 killed-writer and failed-cleanup retry evidence and the synthetic legacy schema
 boundary. No distinct released-binary upgrade is claimed by these tests.
+
+## Adoption recovery binding
+
+New adoption writers bind `adoption_id` into the existing shared lock after
+creating the empty `.fulla-adopt-ID` directory and before writing metadata. The
+ID is also the intended store ID. Recovery preserves this binding across owner
+takeover. It rejects duplicate/malformed IDs, conflicting transaction/peer
+bindings, pending journals, mismatched published store IDs and unsupported
+published domain versions. This additive lock field does not upgrade a domain.
+
+`fulla doctor --recover-lock TOKEN` can explicitly open a compatible unadopted
+candidate, but recovery refuses an unadopted candidate without this binding.
+It still requires the inspected token and a provably dead local owner, with
+exclusive recovery locking and revalidation. It never adopts implicitly:
+unpublished recovery removes only the bound metadata stage, releases the lock,
+and reports `adoption_applied: false`. Retry adoption explicitly. Published
+recovery verifies the matching store ID, synchronizes publication, releases the
+lock and reports `adoption_applied: true`. It does not remove a new occupant at
+the former stage pathname. Neither path decrypts or rewrites live pa material.
+
+Handled staging cleanup failures now retain the adoption lock/binding for
+inspection instead of orphaning their recovery evidence. Unsafe modes still block ordinary recovery. The existing combined permission-
+repair path is restricted to interrupted permission repair, so unsafe-mode
+adoption cleanup requires separate inspection; this change does not bypass
+filesystem validation or claim that combined repair supports adoption. Recovery errors after state
+classification include applied-state and cleanup evidence.
+
+Git/no-Git SIGKILL fixtures cover empty-bound, staged and published adoption,
+wrong/live-owner refusal, exact unchanged live paths/modes/digests, preserved
+reused stage paths, repeated missing-lock refusal and explicit unpublished
+adoption retry. A public CLI fixture distinguishes bound from unbound candidates.
+Malformed/conflicting binding and published-metadata tests fail without changing
+evidence. The mkdir-before-binding window contains only an empty, unbound
+directory; legacy unbound adoption staging remains inspection-only.
+
+Use a supporting Fulla binary for pending adoption recovery before rollback.
+Older development binaries may ignore the new field, cannot recover pre-adoption
+state through their CLI, and do not implement bound-stage cleanup. No actual
+released-binary migration or physical power-loss acceptance is claimed here.

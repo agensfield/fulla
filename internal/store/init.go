@@ -237,7 +237,14 @@ func adopt(directory string, dryRun bool, ui *crypt.UI, hook func(string) error)
 					cleanupErr = securefs.SyncDir(s.Root, ".")
 				}
 			}
-			releaseErr := lock.Release()
+			var releaseErr error
+			if cleanupErr == nil {
+				releaseErr = lock.Release()
+			} else {
+				// Keep the binding available for explicit recovery after failed
+				// unpublished cleanup, including a failed directory synchronization.
+				releaseErr = fault.New("store.cleanup_failed", "adoption cleanup requires lock inspection")
+			}
 			if cleanupErr != nil || releaseErr != nil {
 				failure := fault.New("store.cleanup_failed", "could not confirm adoption staging or lock cleanup")
 				failure.Details["applied"] = published
@@ -288,12 +295,21 @@ func adopt(directory string, dryRun bool, ui *crypt.UI, hook func(string) error)
 	if dryRun {
 		return result, nil
 	}
-	stageName := ".fulla-adopt-" + securefs.ID()
+	meta := newMetadata()
+	stageName := ".fulla-adopt-" + meta.StoreID
 	if err := s.Root.Mkdir(stageName, 0o700); err != nil {
 		return result, err
 	}
 	stage = stageName
-	if err := writeMetadataContents(s.Root, stage, newMetadata(), "init"); err != nil {
+	if err := s.bindAdoption(lock, meta.StoreID); err != nil {
+		return result, err
+	}
+	if hook != nil {
+		if err := hook("bound"); err != nil {
+			return result, err
+		}
+	}
+	if err := writeMetadataContents(s.Root, stage, meta, "init"); err != nil {
 		return result, err
 	}
 	if hook != nil {

@@ -1904,3 +1904,35 @@ adoption, exact bytes, alternating CRUD, shared lock, basic rollback and mutuall
 authenticated OpenSSH loopback sync. The no-Git predecessor's known post-write
 exit 1 remains explicit in its fixture receipt. `go vet ./...` passed. No live
 pa adoption or external-host cutover was performed.
+
+### Bound adoption recovery (2026-09-06)
+
+The shared lock now records adoption_id before metadata writes, matching the
+intended store ID and staging suffix. Explicit doctor lock recovery can open
+bound unadopted candidates. It rejects unbound candidates, verifies the dead
+local owner/token, preserves the binding during takeover, and either removes
+only unpublished bound metadata staging or finalizes matching published
+metadata without touching a reused staging pathname. Handled cleanup failures
+retain the binding; recovery reports adoption_applied and lock release.
+
+Six Git/no-Git SIGKILL cases cover bound/staged/published boundaries, unchanged
+live material/history, exact bytes and explicit adoption retry. Public CLI
+bound/unbound fixtures and malformed/conflicting bindings, mismatched store ID
+and future-domain refusal checks are included. Domain versions are unchanged.
+Legacy unbound stages, initial mkdir-before-binding empties, killed initialization
+siblings, physical power loss and released-version rollback remain separate.
+See metadata-compatibility.md for the new persisted-field and recovery boundary.
+
+Review found that permission recovery constructs a Store without loading Meta.
+The first full-suite run confirmed TestPermissionRepairKilledOwnerRecovery
+failed with store.uninitialized under the initial cached-Meta gate. The gate
+was moved to ordinary Recover and now inspects filesystem metadata presence;
+the separately validated permission-repair path retains its existing contract.
+Adoption/permission/CLI targeted race tests passed (store 25.691s, CLI 2.546s)
+and vet passed after correction. A full rerun verifies the final tree.
+Negative overlays omitting adoption recovery and restoring adopted-only CLI
+opening fail the killed-owner and public-CLI assertions respectively.
+
+The rebuilt native binary also passed pinned real shell-pa Git/no-Git adoption,
+exact bytes, alternating CRUD, shared locking, basic rollback and authenticated
+OpenSSH loopback sync with the new binding. No real user store was changed.

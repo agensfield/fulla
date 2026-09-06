@@ -96,7 +96,7 @@ func TestAdoptionCleanupAndAppliedEvidence(t *testing.T) {
 					if failure.Code != "store.cleanup_failed" || failure.Status != wantStatus || failure.Details["applied"] != published || failure.Details["cleanup_required"] != true {
 						t.Fatal("wrong cleanup evidence", failure)
 					}
-					wantsLock := strings.HasPrefix(scenario, "lock-") || scenario == "changed-owner"
+					wantsLock := strings.HasPrefix(scenario, "lock-") || scenario == "changed-owner" || scenario == "stage-denied"
 					if (failure.Details["lock_cleanup_required"] == true) != wantsLock {
 						t.Fatal("wrong lock cleanup evidence")
 					}
@@ -139,7 +139,7 @@ func TestAdoptionCleanupAndAppliedEvidence(t *testing.T) {
 						t.Fatal("changed replacement lock", err)
 					}
 				}
-				if scenario == "handled" || scenario == "reused" || scenario == "stage-denied" {
+				if scenario == "handled" || scenario == "reused" {
 					if _, err := s.Root.Lstat("lock"); !os.IsNotExist(err) {
 						t.Fatal("retained releasable lock", err)
 					}
