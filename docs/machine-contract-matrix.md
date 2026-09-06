@@ -98,3 +98,19 @@ no-Git stores in JSON and noninteractive human modes. It checks zero stdin reads
 the JSON error code and unchanged store files/modes. A previous-dispatcher source
 overlay consumes stdin on the duplicate-add case and fails the regression.
 This is specific input-order evidence, not complete per-channel parity proof.
+
+## Native target signals
+
+`TestRunTargetTerminatesByNativeSignal` starts a real Fulla test process, maps
+fixture entries into a clean environment, and waits for the executed target to
+report its PID after checking that environment. The reported PID must equal the
+original Fulla PID. The parent then sends SIGINT or SIGTERM to that owned PID and
+checks the operating-system wait status is termination by that exact signal,
+not an ordinary exit code translated by a supervisor. No diagnostic output or
+store file/mode changes are permitted. Startup and termination are bounded by a
+ten-second context; failed tests kill and reap the owned process.
+
+Both cases and the existing PID/exit-23 test pass under race detection. This is
+direct native signal evidence on the tested host. Foreground-terminal-generated
+signals, ignored dispositions and inherited signal masks remain separate cases;
+this test does not claim those through inference.

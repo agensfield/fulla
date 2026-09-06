@@ -1801,3 +1801,13 @@ selected config: both avoid config/store access and leave the fixture directory
 unchanged. JSON help retains the fulla.cli/v1 envelope and identical help text.
 Build and CLI vet pass. This is help/discovery work, not acceptance of every
 listed workflow or completion of preview qualification.
+
+### Native run target signal acceptance (2026-09-06)
+
+Added real subprocess cases for SIGINT and SIGTERM after the run target reports
+readiness with the original Fulla PID and verifies its mapped clean environment.
+The parent checks native signal wait status, no diagnostic output and unchanged
+store paths/modes/hashes. The existing PID/exit-23 case still passes. Targeted
+race tests and CLI vet pass. No production code changed. Direct delivery to the
+owned PID does not establish terminal-generated signals or inherited signal-mask
+behavior; those remain explicit acceptance limits.
