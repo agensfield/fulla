@@ -2493,3 +2493,26 @@ Receipt creation before binding, atomic temporary-file windows and physical
 power-loss behavior are not proved by these tests. The inventory identifies
 external artifact publication versus internal export receipt as a concrete next
 acceptance target. No release tag or live credential cutover occurred.
+
+## Export post-publication failure classification (2026-09-06)
+
+The J9 export audit found a concrete applied-state bug: PublishArtifact used the
+error-only PublishNew wrapper, losing the successful-rename flag when parent
+synchronization failed. Both logical and full export could therefore report
+ordinary export.publish_failed with a complete artifact already present.
+
+PublishArtifact now preserves the flag and returns status 3, applied=true and
+durability_confirmed=false after publication; pre-publication failures remain
+status 1 and error text stays redacted. Existing output is never replaced on retry.
+Four Git/no-Git before/after-publication fixtures check exact private output bytes,
+refused overwrite and unchanged store state. The publisher fixture models the
+outcome; securefs independently injects failure at its post-rename sync callback.
+The first fixture run refused macOS's /var alias before reaching the hook; resolving
+the fixture parent fixed the test without relaxing production path checks.
+
+Race acceptance for the regression, scoped recovery, full disaster/confirmation
+and composite archive restore passed in 39.005s. The securefs post-rename callback
+regression passed under race in 1.391s; full-project vet passed, followed by store
+vet after the fixture correction. Disabling the applied branch fails both applied
+cases with the original misleading export.publish_failed classification. This is
+handled-error evidence, not killed-export or hardware durability acceptance.

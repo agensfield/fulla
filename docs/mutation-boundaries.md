@@ -21,7 +21,7 @@ No SIGKILL case is physical power-loss or filesystem durability proof.
 | Sync entry transfer | Authenticated remote session and scoped import, then per-store journal engine | [Cross-host retry](crosshost-acceptance.md) covers lost imported/exported replies and rerun convergence on Git/no-Git stores. Transport evidence does not cover every entry-publication boundary independently. |
 | Identity rotation | Bound transaction, verified new ciphertext/private material, journal, per-path publication, commit, private-copy cleanup | `rotation_crash_test.go`, `rotation_publication_test.go`, [owned publication](rotation-publication.md). Pre-binding and legacy unbound private-copy accounting remains separate. |
 | Snapshot prune | Independent prune journal, recursive snapshot deletion, receipt, cleanup | `prune_test.go`: prepared, removed, receipted kills; normal/basic namespaces and reconstructed partial recursive unlink. The reconstructed unlink is not an observed instruction-level kill. |
-| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Artifact-versus-receipt applied-state and killed temporary-file/publication boundaries still need explicit acceptance. Stdout logical export has a different, non-atomic stream boundary. |
+| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Post-rename synchronization errors now retain applied-state evidence (below). Artifact-versus-receipt interruption and killed temporary-file/publication boundaries still need explicit acceptance. Stdout logical export has a different, non-atomic stream boundary. |
 | Full archive restore | Independently authenticated complete archive in bound sibling stage, target publication | [Archive recovery](archive-recovery.md): 44 handled/SIGKILL cases across Git modes and absent/empty targets, plus replacement-token cleanup retry. Legacy unbound stages remain separate. |
 | Permission repair | Validated per-path mode changes, receipt, shared lock | `permissions_test.go` includes killed-owner recovery. Per-chmod and receipt boundaries need enumeration; a partially repaired tree is an explicitly recoverable intermediate state. |
 | Doctor recovery | Validated dead-owner takeover, operation-specific reconciliation, lock release | Binding/retry tests cover transactions, init/adopt/restore, peers, prune and rotation. Recovery is itself a mutation and requires its own refusal/retry evidence. |
@@ -49,3 +49,26 @@ The internal hook now names `prepared`, `published` and `receipted`; public
 methods always pass nil. Existing handled-error and lock-release fixtures retain
 injection specifically at `published`. No runtime fault-injection switch or
 persisted format change is introduced.
+
+## Export publication versus directory synchronization
+
+`PublishArtifact` previously used the error-only `securefs.PublishNew` wrapper,
+which discarded whether rename had already published the artifact. A subsequent
+directory-sync failure therefore became ordinary `export.publish_failed`, even
+though the complete output file existed. Logical and full export both use this
+helper and propagate its error.
+
+The helper now uses `PublishNewPublished`: a post-publication failure returns
+status 3 with applied=true and durability_confirmed=false, and tells the caller to
+inspect the artifact before retrying. Pre-publication failures retain status 1;
+underlying filesystem diagnostics are not exposed. No success receipt is invented
+and an existing output remains protected against replacement.
+
+`TestExportPublicationPreservesAppliedState` covers both outcomes on Git/no-Git
+stores, actual exact-byte private-file publication for the applied case, refused
+retry overwrite, diagnostic redaction and unchanged store paths/modes/digests.
+Its internal publisher fixture models a post-publication failure; the securefs
+`TestNewPublicationReportsDirectorySyncFailure` separately injects the error at
+the actual post-rename synchronization callback. These are handled-error tests,
+not physical fsync failure or killed-export acceptance. Disabling the applied
+branch is the negative control and must fail the applied cases.

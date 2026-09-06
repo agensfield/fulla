@@ -153,6 +153,11 @@ func (w *boundedWriter) Write(p []byte) (int, error) {
 }
 
 func (s *Store) PublishArtifact(output string, data []byte) error {
+	return s.publishArtifact(output, data, securefs.PublishNewPublished)
+}
+
+// publish is an internal seam for filesystem outcome tests, not a runtime option.
+func (s *Store) publishArtifact(output string, data []byte, publish func(*os.Root, string, []byte) (bool, error)) error {
 	if err := s.CheckArtifactPath(output); err != nil {
 		return err
 	}
@@ -175,7 +180,12 @@ func (s *Store) PublishArtifact(output string, data []byte) error {
 		return fault.New("export.invalid_path", "export parent directory must exist")
 	}
 	defer r.Close()
-	if err := securefs.PublishNew(r, filepath.Base(abs), data); err != nil {
+	if published, err := publish(r, filepath.Base(abs), data); err != nil {
+		if published {
+			problem := fault.Applied("export published but directory synchronization failed; inspect the artifact before retrying", "export")
+			problem.Details["durability_confirmed"] = false
+			return problem
+		}
 		return fault.New("export.publish_failed", "could not publish export without replacement")
 	}
 	return nil
