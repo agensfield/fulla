@@ -186,10 +186,16 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 	if err != nil {
 		return result, err
 	}
-	if err := securefs.PublishNew(s.Root, metadata+"/rotation.json", data); err != nil {
+	pending, err = securefs.PublishNewPublished(s.Root, metadata+"/rotation.json", data)
+	if pending && err == nil && hook != nil {
+		err = hook("journaled")
+	}
+	if err != nil {
+		if pending {
+			return result, publishedJournalFailure(id)
+		}
 		return result, err
 	}
-	pending = true
 	if err := s.finishRotation(&j, hook); err != nil {
 		return result, fault.Applied("identity rotation requires explicit recovery; shared lock retained", id)
 	}

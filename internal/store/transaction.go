@@ -147,10 +147,16 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 	if err := securefs.WriteNew(s.Root, dir+"/journal.json", data); err != nil {
 		return result, err
 	}
-	if err := securefs.PublishNew(s.Root, metadata+"/pending.json", data); err != nil {
+	pending, err = securefs.PublishNewPublished(s.Root, metadata+"/pending.json", data)
+	if pending && err == nil && hook != nil {
+		err = hook("journaled")
+	}
+	if err != nil {
+		if pending {
+			return result, publishedJournalFailure(id)
+		}
 		return result, err
 	}
-	pending = true
 	result = MutationResult{Transaction: id, Names: names, Receipt: metadata + "/receipts/" + id + ".json", Backup: snapshotBase(snapshotDomain) + "/" + id}
 	if err := s.finishJournal(&j, hook); err != nil {
 		return result, fault.Applied("transaction requires explicit recovery; shared lock retained", id)
@@ -160,6 +166,17 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		return result, fault.Applied("transaction finalized but lock release failed", id)
 	}
 	return result, nil
+}
+
+// A published journal owns its staging even when directory synchronization
+// fails. Keep the lock and evidence for recovery; no live entry is published yet.
+func publishedJournalFailure(id string) error {
+	err := fault.New("transaction.incomplete", "recovery journal published but completion could not be confirmed; shared lock retained")
+	err.Status = 3
+	err.Details["transaction"] = id
+	err.Details["applied"] = false
+	err.Details["recovery_required"] = true
+	return err
 }
 
 func (s *Store) journalWrite(j *Journal) error {

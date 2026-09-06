@@ -41,7 +41,7 @@ func TestRotationCrashHelper(t *testing.T) {
 
 func TestRotationKilledOwnerRecovery(t *testing.T) {
 	for _, destroy := range []bool{false, true} {
-		for _, phase := range []string{"published:passwords/entry.age", "published:recipients", "published:identities", "committed", "cleaned"} {
+		for _, phase := range []string{"journaled", "published:passwords/entry.age", "published:recipients", "published:identities", "committed", "cleaned"} {
 			t.Run(fmt.Sprintf("destroy=%t/%s", destroy, phase), func(t *testing.T) {
 				s := fixture(t, true)
 				value := []byte{0, 255, 10, 65, 10}

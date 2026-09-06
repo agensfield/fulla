@@ -1539,3 +1539,26 @@ retained until explicit prune. Current code preserves encrypted recovery and
 still requires the permanent-delete acknowledgement; no destructive retention
 change or spec rewrite was made while that decision is pending. Neither issue
 prevents independent implementation and acceptance work.
+
+### Preserve ownership after recovery-journal publication errors (2026-09-06)
+
+Transaction and rotation used `PublishNew`, losing the bit that distinguishes a
+successful rename followed by a failed directory sync. Their error cleanup could
+therefore delete recovery staging and release the lock beneath an already
+published journal. Both now use `PublishNewPublished` and retain staging/lock
+when publication occurred. A fixed status-3 `transaction.incomplete` identifies
+the transaction and recovery requirement while correctly reporting no live
+application yet. Raw publication errors are redacted.
+
+Four Git/no-Git × transaction/rotation handled-failure cases verify unchanged
+live bytes, prepared journal/staging/lock retention and successful completion.
+Discarding ownership in a negative-control overlay breaks all four cases by
+removing staging. The existing killed-owner suites now include `journaled`:
+transaction Git/no-Git and rotation retained/destructive key policies. Combined
+handled and killed recovery tests passed under race (46.9s), as did securefs's
+actual-rename/injected-sync-failure test and store vet. See
+[journal publication](journal-publication.md) for exact evidence boundaries.
+
+Pre-journal ignored cleanup failures and killed-writer orphans remain separate
+work. This fix does not claim physical power-loss durability. Prior 762bc31
+passed Linux/macOS CI 34000545363.

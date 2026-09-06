@@ -61,7 +61,7 @@ func TestTransactionCrashHelper(t *testing.T) {
 
 func TestKilledTransactionRecoveryAndChangedGitFilter(t *testing.T) {
 	for _, git := range []bool{false, true} {
-		for _, phase := range []string{"published:a", "published:b", "committed", "receipted"} {
+		for _, phase := range []string{"journaled", "published:a", "published:b", "committed", "receipted"} {
 			t.Run(fmt.Sprintf("git=%t/%s", git, phase), func(t *testing.T) {
 				s := fixture(t, git)
 				if _, err := s.Write("a", []byte("original"), false); err != nil {
