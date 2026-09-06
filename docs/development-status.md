@@ -2208,3 +2208,22 @@ Targeted store/CLI race tests passed (5.966s / 5.931s). Full race passed (store
 34011712035 (1023e29) and 34011904420 (2bdd162) both passed Linux/macOS; the slower
 macOS run advanced normally and needed no rerun. No persisted format or live
 credential changes. See git-routing.md for scope and remaining broader audit.
+
+
+## 2026-09-06: Separate migration applicability from future-write safety
+
+Audited the migration gap instead of manufacturing a predecessor schema.
+`git log -L :newMetadata:internal/store/init.go` shows only the initial 1999674
+introduction: all five domain versions have remained 1. Inspected the real
+831caf6 historical-binary harness and current journal, lock, snapshot and cleanup
+paths. Same-version compatibility and additive recovery bindings do not prove a
+domain transformation engine.
+
+The new domain-upgrade-audit.md records two distinct unresolved requirements:
+transformation-fixture applicability before any actual domain version upgrade,
+and safe basic writes with an unknown transaction domain. The latter cannot be
+fixed by removing the guard or moving snapshots alone because staging, pending
+journal and lock cleanup share the domain's meanings. Asked Arda whether preview
+requires a migration engine without a production transformation; no answer,
+waiver or format change is inferred. F7/F8 remain open. Docs were checked against
+source/history and with git diff --check; no runtime changes or test reruns.

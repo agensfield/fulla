@@ -185,3 +185,12 @@ the regression. Store locked/publication checks remain authoritative.
 These selected channels are bounded evidence, not every possible CLI input or
 racing state change. Future transaction-domain writes and real domain migrations
 remain unresolved.
+
+
+## Domain-upgrade applicability audit
+
+[The domain-upgrade audit](domain-upgrade-audit.md) separates the absence of a
+real predecessor domain version from the actual future-transaction CRUD gap.
+It maps shared journal/staging/lock ownership and explains why removing a guard
+or relocating snapshots alone is unsafe. Transformation-fixture applicability
+has been returned to Arda as a product-scope question; no gate is waived.
