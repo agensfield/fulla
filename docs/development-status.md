@@ -1667,3 +1667,28 @@ plus the final targeted ownership race check and store vet. This preserves the
 cooperative shared-lock contract, not same-user isolation. See the ownership
 section of journal-publication.md. The full-spec goal and broader human-facing
 acceptance work remain active.
+
+### Ordered human Git/no-Git journeys (2026-09-06)
+
+The new native acceptance-human.py joins fresh initialization, hidden text/empty
+input, generation, binary editor add/edit, listing, fixture clipboard copy/expiry,
+move/delete, history/backups and declined/confirmed deletion recovery into one
+ordered journey per Git mode. Final complete names and exact values, deep doctor,
+editor cleanup, lock/staging absence and clipboard expiry pass. JSON observation
+selects opaque recovery IDs without coupling the human presentation to JSON.
+The no-Git case proves current retained-backup behavior without resolving the
+pending irreversible-deletion wording contradiction.
+
+Extracted the existing PTY driver into acceptance_terminal.py, preserving its
+stdin independence, deadlines, terminal restoration and child cleanup. The
+original full interactive harness passes after extraction. Both new journeys
+pass against a fresh native build. Ruff format/lint, basedpyright (zero warnings),
+actionlint and diff checks pass. Initial lint caught loop-closure capture, fixed
+by making each journey a function; typing checks led to an explicit scripts
+execution root and typed metadata observations. The new module cache is scoped
+out of Git so it cannot dirty the release checkout.
+
+Linux/macOS CI now runs the ordered human journey. Real clipboard backends,
+human presentation, shell installation and release qualification remain their
+own gates. Prior cc82d88 and 627ac88 passed hosted CI 34002250879/34002081191.
+See human-journey.md for exact scope and limitations.

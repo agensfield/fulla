@@ -51,6 +51,8 @@ jobs:
           python3 scripts/acceptance-clipboard.py dist/fulla
       - name: Authorized noninteractive agent journey
         run: python3 scripts/acceptance-agent.py dist/fulla
+      - name: Human Git and no-Git journeys
+        run: python3 scripts/acceptance-human.py dist/fulla
       - name: Checkout pinned shell-pa predecessor
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
