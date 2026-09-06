@@ -2046,3 +2046,22 @@ protocol interruption fixtures remain separate. See crosshost-acceptance.md for
 reproduction, artifact hash, cleanup scope and evidence limits. Migration policy,
 other recovery gates and release publication remain open. Predecessor 26da4ab CI
 34008754988 passed on Linux/macOS.
+
+
+## 2026-09-06: Refuse impossible exports before recovery input
+
+The command/input audit found that logical and full exports selected recovery
+protection before checking output eligibility; logical exports also parsed their
+manifest afterward. As a result an occupied destination or malformed manifest
+could consume and close a passphrase descriptor before the inevitable refusal.
+
+Moved output preflight and logical manifest parsing ahead of recovery protection.
+Production store publication still repeats path checks and publishes without
+replacement. Added Git/no-Git JSON/noninteractive cases with a real descriptor,
+zero-offset/open checks, exact error status/code and unchanged full fixture tree.
+Previous-source overlays fail with the consumed/closed-input assertion. Targeted
+race tests passed (1.891s), the full CLI race suite passed (25.474s), and full vet
+passed. Rebuilt native agent Git/no-Git journeys and the full controlling-terminal
+harness passed, including passphrase recovery, confirmations and plugin flows.
+Predecessor c2cc92c CI 34009214090 passed on Linux/macOS. The broader metadata
+migration and release gaps remain explicit.

@@ -70,9 +70,12 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 		if len(p.Args) != 0 || !p.has("output") {
 			return nil, fault.Usage("transfer export requires --output PATH and an explicit recipient or passphrase")
 		}
-		recipients, err := exportRecipients(p)
-		if err != nil {
-			return nil, err
+		// Reject impossible artifact publication and malformed selection before
+		// consuming a recovery passphrase or opening terminal input.
+		if p.value("output") != "-" {
+			if err := s.CheckArtifactPath(p.value("output")); err != nil {
+				return nil, err
+			}
 		}
 		var names []string
 		if p.has("manifest") {
@@ -83,6 +86,10 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 			if err := json.Unmarshal(data, &names); err != nil || len(names) == 0 {
 				return nil, fault.Usage("manifest must be a nonempty JSON array of exact entry names")
 			}
+		}
+		recipients, err := exportRecipients(p)
+		if err != nil {
+			return nil, err
 		}
 		return s.ExportLogical(names, recipients, p.value("output"), a.Out)
 	}

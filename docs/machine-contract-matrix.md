@@ -133,3 +133,24 @@ fixture incorrectly equated `/dev/tty`'s device number with the PTY slave; it no
 checks foreground groups instead. Ruff, basedpyright and actionlint pass.
 Inherited signal masks/ignored dispositions, job suspension/resumption and other
 terminal modes are not proved by this Ctrl-C fixture.
+
+
+## Export eligibility before recovery input
+
+Logical and full-state exports now reject occupied, inside-store or unsafe output
+paths before selecting recovery protection. Logical export also reads and parses
+its optional manifest before consuming a passphrase descriptor or opening the
+terminal prompt. Stdout logical exports bypass file publication checks but still
+validate manifest JSON first. The store repeats publication eligibility checks
+and retains atomic no-replacement publication; preflight does not grant authority
+against a raced destination.
+
+`TestImpossibleExportDoesNotConsumePassphrase` covers occupied logical/full
+outputs and malformed file/stdout manifests on Git/no-Git stores, in JSON and
+noninteractive human modes where stdout protocol ownership permits them. A real
+selected descriptor must remain open at offset zero. The entire fixture tree,
+including output/manifest/passphrase files and modes, must remain unchanged.
+The old dispatcher/transfer implementation fails this test because it consumes
+and closes the descriptor before refusing. This checks impossible publication
+and malformed selection; valid JSON with nonexistent/duplicate entry selectors
+is still validated by the store after recovery protection is selected.
