@@ -1996,3 +1996,11 @@ Inputs reach the shell only through quoted environment variables. The harness
 now records native GOOS/GOARCH as well as Go version. Actionlint, Ruff and
 basedpyright pass. Actual dispatched run evidence follows separately; this does
 not make public-network lookup mandatory on every CI push or publish a release.
+
+Hosted installation run 34007934062 succeeded on Linux/amd64 and macOS/arm64.
+Workflow SHA 605d0aa installed reviewed public source 8b5affb. Both downloaded
+receipts confirm Go 1.26.0, CLI 0.1.0-dev, the same source module version/checksum,
+fresh caches and passing installed-binary checks. Native binary hashes and the
+run link are preserved in distribution.md. These are development-commit receipts,
+not tagged release or Homebrew acceptance; Linux/arm64 and macOS/amd64 native
+installation also remain separate.

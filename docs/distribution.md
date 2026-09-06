@@ -86,6 +86,24 @@ receipt before counting it as evidence. This workflow does not tag, publish or
 install into a user's persistent environment. A development commit run does not
 satisfy tagged-release or Homebrew acceptance.
 
+Hosted [run 34007934062](https://github.com/agensfield/fulla/actions/runs/34007934062)
+passed both native jobs using workflow commit
+`605d0aa5c4b2347acbe305858f0a657c7dc8676d` to install reviewed source
+`8b5affb0f923dd2b566cc507b4d7685769188320`. Both downloaded receipts were inspected:
+Go `go1.26.0`, CLI `0.1.0-dev`, module
+`v0.0.0-20260906025744-8b5affb0f923`, checksum
+`h1:qH8SM9vi9wwXlCtxNIyXozISUTl19svK75WSTWQpF0Q=` and passing fresh-cache,
+installed-binary raw/base64/deep-doctor checks.
+
+| Native platform | Observed installed binary SHA256 |
+| --- | --- |
+| Linux/amd64 | `b9a3f9c3f39d5e37f4e57ecd8b0489c3cb65236ab470b67027d60a3d92b84a87` |
+| macOS/arm64 | `508d51d2ca991cb9e16df58c2268e070d27eedc6cac63ddb7ba082a2b23fffb5` |
+
+This closes native public development-commit installation evidence for those two
+platforms. It does not establish Linux/arm64 or macOS/amd64 native installation,
+tagged-release installation, release signatures or Homebrew behavior.
+
 ## Tag-gated publication
 
 `.github/workflows/release.yml` handles `v*` tag pushes only in
