@@ -18,13 +18,16 @@ def terminal(
     args: list[str],
     actions: Sequence[tuple[bytes, bytes | int]],
     target: Path,
+    *,
+    stdin_tty: bool = False,
 ) -> tuple[int, bytes]:
     pid, fd = pty.fork()
     if pid == 0:
-        # Prompts and hidden input must use /dev/tty, not standard input.
-        null = os.open(os.devnull, os.O_RDONLY)
-        _ = os.dup2(null, 0)
-        os.close(null)
+        if not stdin_tty:
+            # Prompts and hidden input must use /dev/tty, not standard input.
+            null = os.open(os.devnull, os.O_RDONLY)
+            _ = os.dup2(null, 0)
+            os.close(null)
         command = [binary, "--store", str(target)]
         os.execve(binary, command + args, env)
     output = bytearray()

@@ -1811,3 +1811,17 @@ store paths/modes/hashes. The existing PID/exit-23 case still passes. Targeted
 race tests and CLI vet pass. No production code changed. Direct delivery to the
 owned PID does not establish terminal-generated signals or inherited signal-mask
 behavior; those remain explicit acceptance limits.
+
+### Native run controlling-terminal acceptance (2026-09-06)
+
+Added a native-binary PTY gate for attached and detached stdin, controlling and
+foreground terminal identity, mapped value, terminal-generated Ctrl-C/native
+SIGINT termination, no value echo and unchanged fixture-store inventory. The
+shared driver retains detached stdin by default. The initial fixture's device-
+number equality assumption for /dev/tty was invalid; foreground-group checks
+replace it. No production code changed.
+
+The new gate, original interactive harness and ordered Git/no-Git human journeys
+pass locally. Ruff, basedpyright and actionlint pass. CI now runs the new gate on
+Linux/macOS. This is not inherited-mask, ignored-signal, suspension/resumption or
+all-terminal-mode proof; those boundaries remain explicit.

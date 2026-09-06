@@ -114,3 +114,22 @@ Both cases and the existing PID/exit-23 test pass under race detection. This is
 direct native signal evidence on the tested host. Foreground-terminal-generated
 signals, ignored dispositions and inherited signal masks remain separate cases;
 this test does not claim those through inference.
+
+## Controlling terminal and keyboard interrupt
+
+`scripts/acceptance-run-terminal.py` runs the native binary in a disposable PTY
+with stdin attached and detached in separate cases. The executed Python target
+checks its mapped value, PID/session/process-group identity, foreground group on
+`/dev/tty` and stdout/stderr, expected stdin attachment (or EOF), and enabled
+terminal signal processing. After it reports readiness, the driver writes the
+terminal interrupt byte to the PTY master. Native wait status must be SIGINT
+termination; fixture values must not be printed and store paths/modes/hashes must
+remain unchanged. The target explicitly selects SIGINT's default disposition.
+
+Linux/macOS CI runs this gate. The shared driver adds an opt-in attached-stdin
+mode while preserving detached stdin by default; the existing full interactive
+harness and ordered Git/no-Git human journeys still pass locally. The first
+fixture incorrectly equated `/dev/tty`'s device number with the PTY slave; it now
+checks foreground groups instead. Ruff, basedpyright and actionlint pass.
+Inherited signal masks/ignored dispositions, job suspension/resumption and other
+terminal modes are not proved by this Ctrl-C fixture.
