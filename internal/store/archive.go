@@ -49,6 +49,9 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 			err = fault.Applied("full export completed but shared lock release failed", "export")
 		}
 	}()
+	if err := s.CheckLockCleanup(); err != nil {
+		return result, err
+	}
 	if _, err := s.CleanGit(); err != nil {
 		return result, err
 	}
@@ -94,6 +97,9 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 		}
 		if name == "." {
 			return nil
+		}
+		if strings.HasPrefix(name, lockReleasePrefix) {
+			return fault.New("store.lock_cleanup_pending", "full archive refuses detached lock cleanup")
 		}
 		if name == "lock" {
 			return fs.SkipDir
@@ -291,7 +297,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 			return result, fault.New("recovery.invalid_archive", "archive structure failed validation")
 		}
 		name := h.Name
-		if name == "." || name == "" || path.Clean(name) != name || strings.HasPrefix(name, "/") || strings.HasPrefix(name, "../") || name == ".." || name == "lock" || strings.HasPrefix(name, "lock/") || seen[name] {
+		if name == "." || name == "" || path.Clean(name) != name || strings.HasPrefix(name, "/") || strings.HasPrefix(name, "../") || name == ".." || name == "lock" || strings.HasPrefix(name, "lock/") || strings.HasPrefix(name, lockReleasePrefix) || seen[name] {
 			return result, fault.New("recovery.unsafe_archive", "archive contains an unsafe or duplicate path")
 		}
 		seen[name] = true

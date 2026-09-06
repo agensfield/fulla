@@ -129,11 +129,13 @@ func open(name string, repair bool) (*os.Root, error) {
 }
 
 func ValidateTree(root *os.Root) error {
-	return fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
+	return fs.WalkDir(root.FS(), ".", func(name string, _ fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		info, err := entry.Info()
+		// DirEntry.Info can retain the original pathname after Root's directory
+		// is renamed during publication. Inspect through the owned descriptor.
+		info, err := root.Lstat(name)
 		if err != nil {
 			return err
 		}

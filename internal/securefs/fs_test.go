@@ -62,6 +62,37 @@ func TestPrivateFilesAndNoReplace(t *testing.T) {
 	}
 }
 
+func TestValidateTreeAfterRootPublication(t *testing.T) {
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := filepath.Join(parent, "stage")
+	if err := os.Mkdir(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := Open(stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := WriteNew(root, "entry", []byte("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(stage, filepath.Join(parent, "published")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateTree(root); err != nil {
+		t.Fatal("descriptor-owned tree lost after publication", err)
+	}
+	if err := root.Chmod("entry", 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateTree(root); err == nil {
+		t.Fatal("accepted unsafe published file")
+	}
+}
+
 func TestReplacementDistinguishesPublicationFromDurability(t *testing.T) {
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

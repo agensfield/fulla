@@ -359,6 +359,9 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if err := s.CheckArtifactPath(p.value("output")); err != nil {
 			return nil, false, err
 		}
+		if err := s.CheckLockCleanup(); err != nil {
+			return nil, false, err
+		}
 		rs, e := exportRecipients(p)
 		if e != nil {
 			return nil, false, e

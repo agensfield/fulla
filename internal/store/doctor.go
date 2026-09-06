@@ -28,6 +28,7 @@ type DoctorResult struct {
 	Deep            bool                 `json:"deep"`
 	Entries         int                  `json:"entries"`
 	Git             bool                 `json:"git"`
+	LockCleanup     []LockCleanup        `json:"lock_cleanup,omitempty"`
 	Lock            *LockInfo            `json:"lock"`
 	Issues          []string             `json:"issues"`
 	Backups         *BackupSummary       `json:"backups"`
@@ -49,6 +50,14 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 	lock, err := s.InspectLock()
 	if err != nil {
 		return r, err
+	}
+	r.LockCleanup, err = s.InspectLockCleanup()
+	if err != nil {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "store.lock_cleanup_invalid")
+	} else if len(r.LockCleanup) != 0 {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "store.lock_cleanup_pending")
 	}
 	r.Lock = lock
 	if lock != nil {

@@ -1,11 +1,8 @@
 package store
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/agensfield/fulla/internal/fault"
@@ -13,10 +10,11 @@ import (
 )
 
 type Lock struct {
-	store   *Store
-	Token   string
-	StageID string
-	held    bool
+	store      *Store
+	Token      string
+	StageID    string
+	releaseDir string
+	held       bool
 }
 
 func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation, s.Validate) }
@@ -104,25 +102,4 @@ func (s *Store) lock(operation string, validate func() error) (*Lock, error) {
 	return l, nil
 }
 
-func (l *Lock) Release() error {
-	if !l.held {
-		return nil
-	}
-	owner, err := securefs.Read(l.store.Root, "lock/owner", 256)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(string(owner)) != l.Token {
-		return fault.New("store.lock_changed", "lock ownership changed")
-	}
-	for _, name := range []string{"lock/info", "lock/owner"} {
-		if err := l.store.Root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	}
-	if err := l.store.Root.Remove("lock"); err != nil {
-		return err
-	}
-	l.held = false
-	return securefs.SyncDir(l.store.Root, ".")
-}
+func (l *Lock) Release() error { return l.release(nil) }

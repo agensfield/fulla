@@ -1,14 +1,51 @@
 package store
 
 import (
+	"archive/tar"
 	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/agensfield/fulla/internal/crypt"
+	"github.com/agensfield/fulla/internal/fault"
 	"github.com/agensfield/fulla/internal/securefs"
 )
+
+func TestFullRestoreRefusesDetachedCleanupOwnership(t *testing.T) {
+	recovery := fixture(t, false)
+	ids, recipients, err := recovery.Keys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain bytes.Buffer
+	plain.WriteString(fullArchiveMagic)
+	tw := tar.NewWriter(&plain)
+	if err := tw.WriteHeader(&tar.Header{Name: lockReleasePrefix + "future-owner", Typeflag: tar.TypeDir, Mode: 0700}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	encrypted, err := crypt.Encrypt(plain.Bytes(), recipients)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = RestoreFull(encrypted, ids, filepath.Join(parent, "restored"))
+	var failure *fault.Error
+	if !errors.As(err, &failure) || failure.Code != "recovery.unsafe_archive" {
+		t.Fatal("did not reject archived cleanup ownership", err)
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("refusal left extracted ownership or staging", entries, err)
+	}
+}
 
 func TestFullDisasterRestoreAndCircularProtection(t *testing.T) {
 	source := fixture(t, true)

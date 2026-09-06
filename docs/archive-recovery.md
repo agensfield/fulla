@@ -85,3 +85,11 @@ binaries ignore these optional binding fields; use the current binary for an
 interrupted restore. Successful pa-v1 stores and all domain versions remain
 unchanged. General interruption during final lock-file removal and disk-error or
 power-loss behavior beyond these sync/error boundaries remain separate work.
+
+## Detached lock cleanup and archives
+
+[Interrupted lock release](lock-release-recovery.md) leaves versioned metadata-only
+cleanup directories. Full export refuses these before recovery-input consumption
+and rechecks under its lock. Restore rejects archived cleanup paths. Finish
+explicit cleanup with a supporting binary before export; it is never silently
+omitted from a purported complete archive.

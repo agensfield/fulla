@@ -214,3 +214,11 @@ unpublished cleanup from published finalization without a new domain version.
 Older development readers ignore these optional fields; use current Fulla for
 pending restore recovery. See [archive recovery](archive-recovery.md) for fixtures
 and legacy/final-lock-removal limits.
+
+## Transient lock-release ownership
+
+[Atomic shared-lock release](lock-release-recovery.md) uses the separately versioned
+`.fulla-lock-release-v1-HOST-PID-TOKEN` root namespace only during cleanup. It does
+not change the five manifest domains or successful pa-v1 stores. Older binaries
+do not recover this namespace. Finish pending cleanup with a supporting reader
+before rollback or full export; current export and restore refuse to clone it.

@@ -130,6 +130,12 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 }
 
 func (s *Store) Recover(expected string) (map[string]any, error) {
+	active, inspectErr := s.InspectLock()
+	if inspectErr != nil || active == nil || active.Token != expected {
+		if result, handled, err := s.RecoverLockCleanup(expected); handled {
+			return result, err
+		}
+	}
 	if info, err := s.InspectLock(); err != nil {
 		return nil, err
 	} else if info != nil && (info.InitID != "" || info.RestoreID != "") {

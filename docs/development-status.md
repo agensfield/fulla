@@ -2343,3 +2343,43 @@ BSD wait-helper mismatch with Darwin's actual SIGSTOP encoding; the exact
 platform status check fixes the fixture rather than weakening it. Native run
 race passed (2.798s), then CLI vet. This does not claim foreground shell job
 control or exact inherited-state parity.
+
+
+### Atomic shared-lock release recovery (2026-09-06)
+
+2996cfb CI 34015509231 passed Linux/macOS. The next crash audit found that
+sequential removal of lock/info, lock/owner and lock/ could strand an incomplete
+lock without recoverable ownership. Release now atomically detaches the intact
+lock to a versioned host/PID/token-bound directory before deleting metadata.
+Explicit dead-owner cleanup preserves a newer shared lock. Doctor exposes the
+remaining binding; full export refuses it before recovery input and under lock,
+and restore rejects archived cleanup ownership. Successful pa-v1 layout and
+manifest domain versions remain unchanged. See lock-release-recovery.md.
+
+Twelve Git/no-Git SIGKILL cases cover six release boundaries. Actual unlink
+permission denial proves handled failure and same-object retry; reconstructed
+malformed, remote, duplicate, unsafe-mode and nonempty-guard fixtures require
+unchanged-state refusal. Public CLI coverage verifies diagnosis, report privacy,
+input-preserving export refusal and cleanup with a newer writer. An encrypted
+unsafe-archive fixture proves refusal without target or staging residue. A
+negative overlay bypassing content validation fails with "refusal modified
+evidence", demonstrating the guard protects metadata before deletion begins.
+
+The first integrated full suite failed initialization across callers. Root cause:
+ValidateTree used DirEntry.Info, whose retained staging pathname became invalid
+after atomic publication. A dedicated renamed-root regression reproduced
+"lstat .../stage/./entry: no such file or directory". Root.Lstat now inspects
+through the owned descriptor, retaining inode, mode and ACL checks. This is a
+production path fix, not a relaxed assertion or repeated green-run guess.
+Targeted race passed securefs 1.378s, store 5.971s and CLI 2.099s; the archive
+refusal test passed separately (1.748s). Actual historical/current-binary
+acceptance with predecessor 831caf6 passed Git and no-Git fixtures, including
+alternating operations and pending-journal recovery. That is same-version
+compatibility evidence, not a released domain migration or rolling upgrade.
+
+The corrected full race suite passed (store 395.226s, CLI 95.812s, remote
+107.323s, securefs 1.627s), followed by full vet. The subsequently added archive
+refusal test passed its targeted race gate and store/securefs vet also passed.
+Older incomplete unbound locks, storage power loss, the remaining operation-specific acceptance
+matrix and the pending product wording decisions remain open. No tag or live
+credential cutover was performed.
