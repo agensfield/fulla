@@ -1839,3 +1839,20 @@ local installation, tap mutation, tag or release was created.
 The generator is not artifact/signature verification: source-tree validation,
 binary provenance/attestation acceptance and actual installation remain the
 existing release gates. See distribution.md for the bounded checks and command.
+
+### Run pre-decryption refusal boundary (2026-09-06)
+
+Added Git/no-Git public CLI acceptance for eleven invalid run invocations: missing
+command, malformed mapping, invalid/empty environment name, empty/traversing
+entry name, duplicate destination, inheritance without clean mode, invalid
+inherited name, missing entry, and unresolved executable. A real encrypted
+entry and sole fixture plugin identity positively demonstrate decryption
+observation before asserting no plugin invocation on refusals. Every refusal
+also preserves store paths/modes/digests, emits no stdout and consumes no stdin.
+
+The existing production validation order already satisfies these cases. A
+temporary Go overlay inserting a premature Read causes the sentinel assertions
+to fail. Targeted run race tests and CLI vet pass. This is bounded ordering
+acceptance, not every mapped value, concurrent filesystem change, signal mask,
+or process suspension case. Formula-generator predecessor CI 34005266978 passed
+on both Linux and macOS; no release or installation is implied.
