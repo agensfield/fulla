@@ -52,7 +52,11 @@ func writeMetadata(root *os.Root, dir string, meta Metadata, operation string) e
 	return securefs.WriteNew(root, dir+"/receipts/init.json", data)
 }
 
-func Init(directory string, noGit, dryRun bool) (result InitResult, err error) {
+func Init(directory string, noGit, dryRun bool) (InitResult, error) {
+	return initialize(directory, noGit, dryRun, nil)
+}
+
+func initialize(directory string, noGit, dryRun bool, hook func(string) error) (result InitResult, err error) {
 	result = InitResult{Store: directory, Profile: "pa-v1", Git: !noGit, DryRun: dryRun}
 	directory, err = securefs.Canonical(directory, true)
 	if err != nil {
@@ -84,7 +88,31 @@ func Init(directory string, noGit, dryRun bool) (result InitResult, err error) {
 	if err := r.Mkdir(stage, 0o700); err != nil {
 		return result, err
 	}
-	defer r.RemoveAll(stage)
+	ownedStage := true
+	defer func() {
+		if !ownedStage {
+			return
+		}
+		cleanupErr := r.RemoveAll(stage)
+		if cleanupErr == nil {
+			cleanupErr = securefs.SyncDir(r, ".")
+		}
+		if cleanupErr != nil {
+			failure := fault.New("store.cleanup_failed", "could not confirm removal of private initialization staging")
+			failure.Details["applied"] = false
+			failure.Details["cleanup_required"] = true
+			failure.Details["staging_path"] = filepath.Join(parent, stage)
+			failure.Details["target"] = directory
+			var original *fault.Error
+			if errors.As(err, &original) {
+				failure.Details["operation_code"] = original.Code
+				if original.Status >= 128 {
+					failure.Status = original.Status
+				}
+			}
+			err = failure
+		}
+	}()
 	staged, err := r.OpenRoot(stage)
 	if err != nil {
 		return result, err
@@ -128,8 +156,19 @@ func Init(directory string, noGit, dryRun bool) (result InitResult, err error) {
 	if err := securefs.SyncDir(staged, "."); err != nil {
 		return result, err
 	}
+	if hook != nil {
+		if err := hook("staged"); err != nil {
+			return result, err
+		}
+	}
 	if err := securefs.RenameNew(r, stage, filepath.Base(directory)); err != nil {
 		return result, fault.New("store.publish_failed", "could not publish initialization without replacement")
+	}
+	ownedStage = false
+	if hook != nil {
+		if err := hook("published"); err != nil {
+			return result, fault.Applied("store initialized but finalization interrupted", "init")
+		}
 	}
 	if err := securefs.SyncDir(r, "."); err != nil {
 		return result, fault.Applied("store initialized but parent synchronization failed", "init")

@@ -1856,3 +1856,22 @@ to fail. Targeted run race tests and CLI vet pass. This is bounded ordering
 acceptance, not every mapped value, concurrent filesystem change, signal mask,
 or process suspension case. Formula-generator predecessor CI 34005266978 passed
 on both Linux and macOS; no release or installation is implied.
+
+### Initialization staging cleanup and publication ownership (2026-09-06)
+
+Initialization unconditionally deferred RemoveAll of its staging pathname and
+ignored the result. A handled failure could therefore leave generated private
+identity material without cleanup evidence; after publication, reuse of the old
+staging pathname could cause deletion of its new occupant. Initialization now
+tracks staging ownership only until successful no-replace rename. Unpublished
+cleanup removes the owned stage and synchronizes its parent; failure returns
+store.cleanup_failed with applied=false, cleanup_required, staging_path and
+target. Original typed operation code and signal status are retained without
+copying arbitrary original error text.
+
+Git/no-Git fixtures cover handled cancellation cleanup, actual chmod-denied
+cleanup with private identity retained, and post-publication reuse with an
+untouched new occupant and a deep-valid published store. A negative overlay
+discarding cleanup failures and retaining obsolete stage ownership fails both
+regressions. This does not add automatic cleanup of killed-writer sibling
+orphans, fix adoption staging, or prove physical power-loss durability.
