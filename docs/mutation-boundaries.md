@@ -21,7 +21,7 @@ No SIGKILL case is physical power-loss or filesystem durability proof.
 | Sync entry transfer | Authenticated remote session and scoped import, then per-store journal engine | [Cross-host retry](crosshost-acceptance.md) covers lost imported/exported replies and rerun convergence on Git/no-Git stores. Transport evidence does not cover every entry-publication boundary independently. |
 | Identity rotation | Bound transaction, verified new ciphertext/private material, journal, per-path publication, commit, private-copy cleanup | `rotation_crash_test.go`, `rotation_publication_test.go`, [owned publication](rotation-publication.md). Pre-binding and legacy unbound private-copy accounting remains separate. |
 | Snapshot prune | Independent prune journal, recursive snapshot deletion, receipt, cleanup | `prune_test.go`: prepared, removed, receipted kills; normal/basic namespaces and reconstructed partial recursive unlink. The reconstructed unlink is not an observed instruction-level kill. |
-| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Post-rename synchronization errors now retain applied-state evidence (below). Twelve Git/no-Git native kills now cover completed encoding, published artifact and published receipt for logical/full export (below). Low-level temporary-file/publication windows and receipt reconstruction remain open. Stdout logical export has a different, non-atomic stream boundary. |
+| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Post-rename synchronization errors now retain applied-state evidence (below). Bound export-v1 receipt/staging recovery now covers encoding, binding, staging, rename, publication and receipt boundaries (below). Generic receipt-write windows and physical durability remain separate. Stdout logical export has a different, non-atomic stream boundary. |
 | Full archive restore | Independently authenticated complete archive in bound sibling stage, target publication | [Archive recovery](archive-recovery.md): 44 handled/SIGKILL cases across Git modes and absent/empty targets, plus replacement-token cleanup retry. Legacy unbound stages remain separate. |
 | Permission repair | Validated per-path mode changes, receipt, shared lock | `permissions_test.go` includes killed-owner recovery. Per-chmod and receipt boundaries need enumeration; a partially repaired tree is an explicitly recoverable intermediate state. |
 | Doctor recovery | Validated dead-owner takeover, operation-specific reconciliation, lock release | Binding/retry tests cover transactions, init/adopt/restore, peers, prune and rotation. Recovery is itself a mutation and requires its own refusal/retry evidence. |
@@ -73,7 +73,7 @@ the actual post-rename synchronization callback. These are handled-error tests,
 not physical fsync failure or killed-export acceptance. Disabling the applied
 branch is the negative control and must fail the applied cases.
 
-## Native killed-export boundaries
+## Initial native killed-export boundaries (50d8407)
 
 `TestKilledExportPreservesArtifactAndStore` runs twelve native subprocess cases:
 Git/no-Git stores, logical/full exports, and completed encoding, artifact publication
@@ -117,3 +117,54 @@ dispatch cases prove status 3, stderr-only diagnostics and no receipt after a sh
 write. Previous transfer.go source fails all ten store error/short-write cases.
 These controlled writer fixtures do not claim operating-system SIGPIPE handling
 or atomic stream delivery.
+
+## Bound file-export recovery
+
+The earlier killed-export checkpoint established artifact survival but lacked
+receipt reconstruction. File exports now prepare a versioned receipt containing
+the canonical output path, ciphertext digest/size, operation metadata and a fresh
+ID. The shared owner record binds that ID as export_receipt with the explicit
+stage_protocol=export-v1 discriminator before any external stage is created.
+The external stage is the private `.fulla-export-ID` file beside the output.
+Only encrypted bytes are staged, including for independently protected full
+archives. Receipt preparation happens after encoding, so a full archive does not
+include its own pending export receipt.
+
+Ordinary publication writes and synchronizes staging, publishes without replacing
+an output, synchronizes the parent and finalizes the receipt as applied. A bound
+failure retains ownership and reports recovery_required; successful completion
+uses the existing atomic lock-release path. Logical stdout keeps its explicit
+stream semantics and has no external-file recovery journal.
+
+Recovery validates the receipt version/binding, exclusive operation, canonical
+outside-store path, private object types, ciphertext size/digest and existing
+receipt phase before taking ownership, then repeats validation under the guard.
+It refuses changed outputs and unsafe stage links. Missing output means cleanup
+of the exact bound stage and an aborted receipt; matching output means applied
+receipt reconciliation. It synchronizes cleanup/publication evidence before
+releasing ownership. Replacement owner tokens preserve the export binding on
+recovery failure; retries must use the newly inspected token.
+
+File-export recovery requires the understood transaction domain. CLI preflight
+checks that eligibility before recovery input, and exports repeat it under the
+shared lock before decryption. Generic artifact publication remains independent:
+doctor reports must work without readable store metadata. The initial integration
+incorrectly put the domain requirement in that generic path; the full CLI suite
+caught the regression, and export-specific preflight fixed it.
+
+Current native acceptance names encoded, bound, staged, renamed-before-parent-sync,
+published and receipted boundaries on both export types and Git modes. Additional
+fixtures reject changed outputs, staging symlinks/hardlinks, future versions,
+inside-store targets, wrong receipt IDs and competing bindings without changing
+store ownership. A truncated stage reconstructs an interrupted write. Real
+cleanup denial after validation proves replacement-token retention and retry.
+The actual previous 772cfab binary refuses the unknown export-v1 discriminator,
+preserves store/stage state and permits subsequent current-reader recovery.
+
+This adds recovery records without changing pa-v1 or manifest domain counters.
+It is not a released domain migration. Older development binaries predating the
+staging-protocol guard are not safe recovery tools; finish pending exports with a
+supporting binary before rollback. Unbound prepared receipts are inert historical
+evidence, never discovered as authority by scanning. Interruptions inside the
+receipt's own generic atomic write and physical power loss remain separate from
+the named process-kill boundaries. No atomic stdout delivery is claimed.

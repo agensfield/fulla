@@ -362,7 +362,7 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if !p.has("full") || len(p.Args) != 0 || p.value("output") == "" || p.value("output") == "-" {
 			return nil, false, fault.Usage("backup export requires --full and --output PATH")
 		}
-		if err := s.CheckArtifactPath(p.value("output")); err != nil {
+		if err := s.CheckExportPath(p.value("output")); err != nil {
 			return nil, false, err
 		}
 		if err := s.CheckLockCleanup(); err != nil {

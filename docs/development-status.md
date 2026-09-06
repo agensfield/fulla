@@ -2555,3 +2555,34 @@ The previous transfer.go overlay fails all ten store error/short-write cases,
 including the former nil-error false success. Full-project vet passed. These are
 controlled writer tests; native SIGPIPE and interrupted streams remain separate.
 File-export fix 0b520f6 now has successful Linux/macOS hosted CI 34020275708.
+
+## Bound file-export recovery (2026-09-06)
+
+Logical and full file exports now bind a prepared ciphertext plan to their shared
+lock before creating external staging. Explicit recovery validates the destination
+and bound private objects, removes incomplete staging, and records aborted or
+applied evidence according to the verified artifact. Handled failures retain the
+binding; unsupported readers refuse the export-v1 discriminator. Stdout retains
+its separate partial-output contract.
+
+The native kill matrix covers Git/no-Git logical/full exports at six boundaries
+(encoded, bound, staged, renamed, published, receipted), including exact artifact
+verification and no-overwrite retry. Refusal fixtures cover contradictory receipts,
+unsafe objects and competing ownership. Partial staging and real cleanup denial
+exercise cleanup and replacement-token retry. An actual 772cfab binary refuses
+the pending protocol before current recovery succeeds.
+
+The final Go 1.26.0 full race suite passed with packages scheduled sequentially:
+store 456.047s, CLI 53.774s, remote 42.445s; full-project vet passed. The earlier
+run included an integration mistake that incorrectly applied transaction-domain
+checks to doctor reports (fixed by keeping export eligibility separate), and
+exhausted the store package's unchanged ten-minute timeout near its end. The
+active test had run for only a second; overlapping test commands may have added
+contention, but the sole cause of the runtime difference is not established.
+Targeted protocol, cleanup-denial, doctor, previous-reader and agent journey
+checks also passed; the final full race suite covers the latest source.
+
+This closes the bound file-export staging and receipt-reconciliation tranche,
+not physical power-loss proof or all historical-reader compatibility. The user
+paused the full goal and authorized finishing only this tranche before a
+requirements/progress review. No release or live credential cutover is implied.

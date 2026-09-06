@@ -70,3 +70,14 @@ operation/target ownership, dead-writer evidence, replacement-token handling and
 publication state before acquiring deletion authority. Prefix matching alone
 must never become that cleanup authority. Physical durability, external copies
 and the canonical no-Git deletion/retention wording remain separate questions.
+
+## Bound external export staging
+
+File exports now stage encrypted bytes only in the exact `.fulla-export-ID` file
+beside the selected output. A prepared receipt plus export-v1 owner binding is
+published before creation. Recovery validates private regular-file ownership and
+rejects symlink/hardlink staging; it removes unpublished partial ciphertext or
+reconciles matching output. Full-archive staging remains protected by the explicit
+independent recovery recipient. No new plaintext/private-key staging is introduced.
+Native kills and reconstructed partial writes are distinguished in the mutation
+boundary inventory; no secure-erasure or physical power-loss claim is added.

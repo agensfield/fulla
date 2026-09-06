@@ -67,6 +67,16 @@ func (s *Store) validateStageProtocol(info *LockInfo) error {
 	if info.InitID != "" || info.RestoreID != "" {
 		return nil
 	}
+	if info.ExportReceipt != "" {
+		for _, name := range []string{"pending.json", "rotation.json", "prune.json", "basic-v1/pending.json"} {
+			if _, err := s.Root.Lstat(metadata + "/" + name); err == nil {
+				return fault.New("transaction.conflict", "export recovery refuses competing journals")
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		}
+		return nil
+	}
 	if info.StageProtocol == "" {
 		if _, err := s.Root.Lstat(journalPath(basicProtocol)); err == nil {
 			return fault.New("transaction.conflict", "basic journal requires its explicit staging protocol binding")

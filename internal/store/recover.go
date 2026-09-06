@@ -20,6 +20,7 @@ import (
 type LockInfo struct {
 	Token          string `json:"token"`
 	Operation      string `json:"operation"`
+	ExportReceipt  string `json:"export_receipt,omitempty"`
 	PeerReceipt    string `json:"peer_receipt,omitempty"`
 	StageID        string `json:"stage_id,omitempty"`
 	StageProtocol  string `json:"stage_protocol,omitempty"`
@@ -63,13 +64,18 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 			info.Host = value
 		case "operation":
 			info.Operation = value
+		case "export_receipt":
+			if info.ExportReceipt != "" || !validID(value) {
+				return nil, fault.New("store.lock_unknown", "invalid export receipt binding")
+			}
+			info.ExportReceipt = value
 		case "peer_receipt":
 			if info.PeerReceipt != "" || !validID(value) {
 				return nil, fault.New("store.lock_unknown", "invalid peer receipt binding")
 			}
 			info.PeerReceipt = value
 		case "stage_protocol":
-			if info.StageProtocol != "" || value != basicProtocol {
+			if info.StageProtocol != "" || (value != basicProtocol && value != exportProtocol) {
 				return nil, fault.New("store.lock_unknown", "unsupported staging protocol")
 			}
 			info.StageProtocol = value
@@ -111,7 +117,10 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 			info.RestoreTarget = string(decoded)
 		}
 	}
-	if info.StageProtocol != "" && info.StageID == "" {
+	if info.ExportReceipt != "" && (info.StageID != "" || info.StageProtocol != exportProtocol || info.PeerReceipt != "" || info.InitID != "" || info.RestoreID != "" || info.AdoptionID != "") {
+		return nil, fault.New("store.lock_unknown", "conflicting export binding")
+	}
+	if (info.StageProtocol == basicProtocol && info.StageID == "") || (info.StageProtocol == exportProtocol && info.ExportReceipt == "") {
 		return nil, fault.New("store.lock_unknown", "staging protocol requires an owner binding")
 	}
 	if (info.RestoreID == "") != (info.RestoreTarget == "") || (info.RestoreID == "" && info.RestoreStoreID != "") || (info.RestoreID != "" && (info.InitID != "" || info.StageID != "" || info.AdoptionID != "" || info.PeerReceipt != "")) {
@@ -187,6 +196,11 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if err := s.validateStageProtocol(info); err != nil {
 		return nil, err
 	}
+	if info.ExportReceipt != "" {
+		if _, _, err := s.inspectExport(info.ExportReceipt); err != nil {
+			return nil, err
+		}
+	}
 	guard, err := s.Root.OpenFile("lock/recovery", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
@@ -205,7 +219,15 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if err := validate(); err != nil {
 		return nil, err
 	}
+	if info.ExportReceipt != "" {
+		if _, _, err := s.inspectExport(info.ExportReceipt); err != nil {
+			return nil, err
+		}
+	}
 	count := 0
+	if info.ExportReceipt != "" {
+		count++
+	}
 	creationUnpublished := false
 	if info.InitID != "" || info.RestoreID != "" {
 		count++
@@ -248,6 +270,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		operation = info.Operation
 	}
 	newInfo := fmt.Sprintf("pid=%d host=%s operation=%s started=%s\n", os.Getpid(), info.Host, operation, time.Now().UTC().Format(time.RFC3339))
+	if info.ExportReceipt != "" {
+		newInfo = strings.TrimSpace(newInfo) + " export_receipt=" + info.ExportReceipt + "\n"
+	}
 	if info.PeerReceipt != "" {
 		newInfo = strings.TrimSpace(newInfo) + " peer_receipt=" + info.PeerReceipt + "\n"
 	}
@@ -278,6 +303,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 		return nil, err
 	}
 	expected = newToken
+	if info.ExportReceipt != "" {
+		return s.recoverExport(info.ExportReceipt, expected)
+	}
 	if info.InitID != "" || info.RestoreID != "" {
 		return s.recoverCreation(info, expected)
 	}

@@ -3,7 +3,6 @@ package store
 import (
 	"archive/tar"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +40,7 @@ func (s *Store) exportFull(recipients []age.Recipient, output string, hook func(
 	if len(recipients) == 0 {
 		return result, fault.Interaction("full export requires separate recovery protection")
 	}
-	if err := s.CheckArtifactPath(output); err != nil {
+	if err := s.CheckExportPath(output); err != nil {
 		return result, err
 	}
 	lock, err := s.Lock("backup export")
@@ -49,10 +48,20 @@ func (s *Store) exportFull(recipients []age.Recipient, output string, hook func(
 		return result, err
 	}
 	defer func() {
+		if err != nil && lock.ExportReceipt != "" {
+			err = exportRecoveryRequired(err, lock.ExportReceipt)
+			return
+		}
 		if e := lock.Release(); e != nil && err == nil {
 			err = fault.Applied("full export completed but shared lock release failed", "export")
 		}
 	}()
+	if err := s.RequireDomain("backup"); err != nil {
+		return result, err
+	}
+	if err := s.CheckExportPath(output); err != nil {
+		return result, err
+	}
 	if err := s.CheckLockCleanup(); err != nil {
 		return result, err
 	}
@@ -152,26 +161,15 @@ func (s *Store) exportFull(recipients []age.Recipient, output string, hook func(
 			return result, err
 		}
 	}
-	if err := s.PublishArtifact(output, encrypted.Bytes()); err != nil {
+	receipt, err := s.prepareExport(lock, output, encrypted.Bytes(), exportReceipt{Version: 1, Command: "backup export", Full: true, Files: result.Files, At: time.Now().UTC().Format(time.RFC3339Nano)})
+	if err != nil {
 		return result, err
 	}
-	if hook != nil {
-		if err := hook("published"); err != nil {
-			return result, fault.Applied("full archive published but finalization interrupted", "export")
-		}
+	if err := s.publishExport(receipt, encrypted.Bytes(), hook); err != nil {
+		return result, err
 	}
 	result.Path = output
 	result.Warning = "External archive copies cannot be revoked by deleting the local copy."
-	id := securefs.ID()
-	receipt, _ := json.Marshal(map[string]any{"version": 1, "command": "backup export", "full": true, "files": result.Files, "at": time.Now().UTC().Format(time.RFC3339Nano), "applied": true})
-	if err := securefs.PublishNew(s.Root, metadata+"/receipts/"+id+".json", receipt); err != nil {
-		return result, fault.Applied("full archive published but receipt finalization failed", id)
-	}
-	if hook != nil {
-		if err := hook("receipted"); err != nil {
-			return result, fault.Applied("full archive receipt published but finalization interrupted", id)
-		}
-	}
 	return result, nil
 }
 

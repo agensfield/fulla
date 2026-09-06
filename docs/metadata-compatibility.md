@@ -226,3 +226,17 @@ and legacy/final-lock-removal limits.
 not change the five manifest domains or successful pa-v1 stores. Older binaries
 do not recover this namespace. Finish pending cleanup with a supporting reader
 before rollback or full export; current export and restore refuse to clone it.
+
+## File-export recovery discriminator
+
+Bound file exports use export_receipt plus stage_protocol=export-v1 in the shared
+owner record. Their prepared/applied/aborted receipts include a versioned external
+ciphertext plan; ordinary pa-v1 and manifest counters are unchanged. File export
+and its recovery require the understood transaction domain. Doctor's generic
+report artifact path does not require valid feature metadata.
+
+An actual binary built from 772cfab refuses the new discriminator before changing
+the owner or staging. Current recovery then succeeds. This is development-binary
+compatibility evidence, not a released domain transformation or proof about
+pre-discriminator historical binaries. Finish pending exports using a supporting
+binary before rollback. See [the boundary inventory](mutation-boundaries.md).

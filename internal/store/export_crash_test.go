@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"github.com/agensfield/fulla/internal/fault"
 )
 
 func TestExportCrashHelper(t *testing.T) {
@@ -27,12 +28,28 @@ func TestExportCrashHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	if token := os.Getenv("FULLA_EXPORT_RECOVERY_DENIAL"); token != "" {
+		_, err := s.recover(token, func() error {
+			if err := s.Validate(); err != nil {
+				return err
+			}
+			return os.Chmod(filepath.Dir(os.Getenv("FULLA_EXPORT_CRASH_OUTPUT")), 0500)
+		})
+		if err == nil {
+			t.Fatal("expected cleanup denial")
+		}
+		fmt.Println("export-recovery-retained")
+		return
+	}
 	recipient, err := age.ParseX25519Recipient(os.Getenv("FULLA_EXPORT_CRASH_RECIPIENT"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	hook := func(phase string) error {
 		if phase == os.Getenv("FULLA_EXPORT_CRASH_PHASE") {
+			if os.Getenv("FULLA_EXPORT_CRASH_HANDLED") == "true" {
+				return errors.New("fixture export interruption")
+			}
 			fmt.Println("export-boundary")
 			time.Sleep(time.Minute)
 		}
@@ -43,6 +60,13 @@ func TestExportCrashHelper(t *testing.T) {
 	} else {
 		_, err = s.exportLogical(nil, []age.Recipient{recipient}, os.Getenv("FULLA_EXPORT_CRASH_OUTPUT"), io.Discard, hook)
 	}
+	if os.Getenv("FULLA_EXPORT_CRASH_HANDLED") == "true" {
+		var failure *fault.Error
+		if !errors.As(err, &failure) || failure.Details["recovery_required"] != true {
+			t.Fatal("missing retained export evidence", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +75,7 @@ func TestExportCrashHelper(t *testing.T) {
 func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 	for _, git := range []bool{false, true} {
 		for _, kind := range []string{"logical", "full"} {
-			for _, phase := range []string{"encoded", "published", "receipted"} {
+			for _, phase := range []string{"encoded", "bound", "staged", "renamed", "published", "receipted"} {
 				t.Run(fmt.Sprintf("git=%t/%s/%s", git, kind, phase), func(t *testing.T) {
 					s := fixture(t, git)
 					values := map[string][]byte{"binary": {0, 255, 10, 42}, "empty": {}}
@@ -114,7 +138,7 @@ func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 						t.Fatal("accepted wrong owner")
 					}
 					result, err := s.Recover(owner.Token)
-					if err != nil || result["lock_released"] != true || result["recovered"] != false {
+					if err != nil || result["lock_released"] != true || result["recovered"] != (phase != "encoded") {
 						t.Fatal("unexpected export lock recovery", result, err)
 					}
 					after := archiveTree(t, s, false)
@@ -124,7 +148,7 @@ func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 							continue
 						}
 						newFiles++
-						if phase != "receipted" || filepath.Dir(name) != metadata+"/receipts" {
+						if phase == "encoded" || filepath.Dir(name) != metadata+"/receipts" {
 							t.Fatal("unexpected store residue", name)
 						}
 						receiptBytes, err := os.ReadFile(filepath.Join(s.Dir, name))
@@ -134,6 +158,7 @@ func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 						var receipt struct {
 							Command string
 							Applied bool
+							Phase   string
 						}
 						if err := json.Unmarshal(receiptBytes, &receipt); err != nil {
 							t.Fatal(err)
@@ -142,13 +167,18 @@ func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 						if kind == "full" {
 							command = "backup export"
 						}
-						if receipt.Command != command || !receipt.Applied {
+						wantApplied := phase == "renamed" || phase == "published" || phase == "receipted"
+						wantPhase := "aborted"
+						if wantApplied {
+							wantPhase = "applied"
+						}
+						if receipt.Command != command || receipt.Applied != wantApplied || receipt.Phase != wantPhase {
 							t.Fatal("inaccurate export receipt")
 						}
 						delete(after, name)
 					}
 					expectedNew := 0
-					if phase == "receipted" {
+					if phase != "encoded" {
 						expectedNew = 1
 					}
 					if newFiles != expectedNew || !reflect.DeepEqual(before, after) {
@@ -158,7 +188,7 @@ func TestKilledExportPreservesArtifactAndStore(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if phase == "encoded" {
+					if phase == "encoded" || phase == "bound" || phase == "staged" {
 						if len(entries) != 0 {
 							t.Fatal("unpublished export left artifacts")
 						}

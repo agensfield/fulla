@@ -12,6 +12,7 @@ import (
 type Lock struct {
 	store         *Store
 	Token         string
+	ExportReceipt string
 	StageID       string
 	StageProtocol string
 	releaseDir    string

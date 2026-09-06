@@ -90,7 +90,7 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 		// Reject impossible artifact publication and malformed selection before
 		// consuming a recovery passphrase or opening terminal input.
 		if p.value("output") != "-" {
-			if err := s.CheckArtifactPath(p.value("output")); err != nil {
+			if err := s.CheckExportPath(p.value("output")); err != nil {
 				return nil, err
 			}
 		}

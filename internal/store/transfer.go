@@ -62,7 +62,7 @@ func (s *Store) exportLogical(names []string, recipients []age.Recipient, output
 		return result, fault.Interaction("export requires an explicit recovery recipient")
 	}
 	if output != "-" {
-		if err := s.CheckArtifactPath(output); err != nil {
+		if err := s.CheckExportPath(output); err != nil {
 			return result, err
 		}
 	}
@@ -71,10 +71,19 @@ func (s *Store) exportLogical(names []string, recipients []age.Recipient, output
 		return result, err
 	}
 	defer func() {
+		if err != nil && lock.ExportReceipt != "" {
+			err = exportRecoveryRequired(err, lock.ExportReceipt)
+			return
+		}
 		if e := lock.Release(); e != nil && err == nil {
 			err = fault.Applied("export complete but shared lock release failed", "export")
 		}
 	}()
+	if output != "-" {
+		if err := s.CheckExportPath(output); err != nil {
+			return result, err
+		}
+	}
 	if names == nil {
 		names, err = s.Names()
 		if err != nil {
@@ -141,9 +150,12 @@ func (s *Store) exportLogical(names []string, recipients []age.Recipient, output
 			return result, problem
 		}
 	} else {
-		if err := s.PublishArtifact(output, encoded.Bytes()); err != nil {
-			return result, err
+		receipt, prepareErr := s.prepareExport(lock, output, encoded.Bytes(), exportReceipt{Version: 1, Command: "transfer export", Names: names, Entries: int(stats.Entries), At: time.Now().UTC().Format(time.RFC3339Nano)})
+		if prepareErr != nil {
+			return result, prepareErr
 		}
+		result.Receipt = exportReceiptPath(receipt.Export.ID)
+		return result, s.publishExport(receipt, encoded.Bytes(), hook)
 	}
 	if hook != nil {
 		if err := hook("published"); err != nil {
@@ -215,6 +227,15 @@ func (s *Store) publishArtifact(output string, data []byte, publish func(*os.Roo
 		return fault.New("export.publish_failed", "could not publish export without replacement")
 	}
 	return nil
+}
+
+// CheckExportPath adds recovery eligibility to the generic artifact path checks.
+// Doctor reports also use CheckArtifactPath and need no readable store metadata.
+func (s *Store) CheckExportPath(output string) error {
+	if err := s.RequireDomain("transactions"); err != nil {
+		return err
+	}
+	return s.CheckArtifactPath(output)
 }
 
 func (s *Store) CheckArtifactPath(output string) error {
