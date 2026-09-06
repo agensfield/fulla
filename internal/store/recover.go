@@ -20,6 +20,7 @@ type LockInfo struct {
 	Token       string `json:"token"`
 	Operation   string `json:"operation"`
 	PeerReceipt string `json:"peer_receipt,omitempty"`
+	StageID     string `json:"stage_id,omitempty"`
 	PID         int    `json:"pid"`
 	Host        string `json:"host"`
 	Alive       bool   `json:"alive"`
@@ -59,7 +60,15 @@ func (s *Store) InspectLock() (*LockInfo, error) {
 				return nil, fault.New("store.lock_unknown", "invalid peer receipt binding")
 			}
 			info.PeerReceipt = value
+		case "stage_id":
+			if info.StageID != "" || !validID(value) {
+				return nil, fault.New("store.lock_unknown", "invalid staging binding")
+			}
+			info.StageID = value
 		}
+	}
+	if info.StageID != "" && info.PeerReceipt != "" {
+		return nil, fault.New("store.lock_unknown", "conflicting recovery bindings")
 	}
 	if info.PID <= 0 || info.Token == "" || info.Host == "" {
 		return nil, fault.New("store.lock_unknown", "cannot prove lock ownership")
@@ -129,6 +138,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	if count > 1 {
 		return nil, fault.New("transaction.conflict", "multiple pending journals require inspection")
 	}
+	if err := s.validateStagingBinding(info.StageID); err != nil {
+		return nil, err
+	}
 	// Publish this invocation as owner before touching the journal. flock is
 	// released by the kernel on process death, so interrupted recovery retries.
 	operation := "recover"
@@ -138,6 +150,9 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 	newInfo := fmt.Sprintf("pid=%d host=%s operation=%s started=%s\n", os.Getpid(), info.Host, operation, time.Now().UTC().Format(time.RFC3339))
 	if info.PeerReceipt != "" {
 		newInfo = strings.TrimSpace(newInfo) + " peer_receipt=" + info.PeerReceipt + "\n"
+	}
+	if info.StageID != "" {
+		newInfo = strings.TrimSpace(newInfo) + " stage_id=" + info.StageID + "\n"
 	}
 	if err := securefs.Replace(s.Root, "lock/info", []byte(newInfo)); err != nil {
 		return nil, err
@@ -199,6 +214,25 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 				return nil, err
 			}
 		}
+		if info.StageID != "" {
+			if err := s.RequireDomain("transactions"); err != nil {
+				return nil, err
+			}
+			dir := metadata + "/transactions/" + info.StageID
+			if entry, err := s.Root.Lstat(dir); err == nil {
+				if !entry.IsDir() {
+					return nil, fault.New("transaction.invalid_staging", "bound staging is not a directory; recovery lock retained")
+				}
+			} else if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+			if err := s.Root.RemoveAll(dir); err != nil {
+				return nil, fault.New("transaction.cleanup_failed", "unpublished staging cleanup failed; recovery lock retained")
+			}
+			if err := securefs.SyncDir(s.Root, metadata+"/transactions"); err != nil {
+				return nil, fault.New("transaction.cleanup_failed", "could not confirm staging removal; recovery lock retained")
+			}
+		}
 		if err := s.Root.Remove("lock/recovery"); err != nil {
 			return nil, err
 		}
@@ -209,7 +243,7 @@ func (s *Store) recover(expected string, validate func() error) (map[string]any,
 			}
 			return nil, err
 		}
-		return map[string]any{"recovered": info.PeerReceipt != "", "lock_released": true, "peer_receipt": info.PeerReceipt}, nil
+		return map[string]any{"recovered": info.PeerReceipt != "" || info.StageID != "", "lock_released": true, "peer_receipt": info.PeerReceipt, "staging_cleaned": info.StageID}, nil
 	}
 	if err != nil {
 		return nil, err

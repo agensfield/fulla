@@ -45,8 +45,9 @@ separate acceptance work.
 ## Unpublished staging cleanup
 
 Handled failures before journal publication now remove only a directory whose
-exclusive creation succeeded, synchronize its parent after removal, and attempt
-to release the owned lock. Both transaction and rotation use the same cleanup
+exclusive creation succeeded, synchronize its parent after removal, and release
+the owned lock after successful cleanup. Failed cleanup with a recorded staging
+binding retains the lock for explicit recovery. Both operations use the same cleanup
 path. Cleanup or lock-release failures are no longer silently hidden behind the
 original operation error.
 
@@ -62,16 +63,15 @@ lock inspection to `fulla doctor`; JSON retains structured details.
 
 Twelve real permission-denial cases cover Git/no-Git × transaction/rotation ×
 ordinary error/refusal/signal. They verify cleanup evidence, unchanged existing
-store files, no changes outside owned staging, released lock and readable
-unchanged live value. Rotation fixtures retain the generated staged identity to
+store files, no changes outside owned staging, unchanged live bytes and retained bound lock when cleanup fails. Rotation fixtures retain the generated staged identity to
 make the private-copy risk concrete. A changed-lock-owner test verifies that its
 files remain untouched and that its release failure is reported. Reinstating
 ignored cleanup errors through a source overlay makes all 13 cases fail.
 
 These are handled-failure tests on disposable non-root fixtures, not SIGKILL
 cleanup or an automatic orphan-removal mechanism. Unpublished leftover staging
-has no committed recovery journal. Do not infer that ordinary recovery will
-finish or discard it; automatic identification and safe cleanup remain open.
+has no committed recovery journal. Current writers provide the separate owned
+staging binding below; older unbound leftovers remain inspection-only.
 
 ## Read-only staging inventory
 
@@ -89,8 +89,8 @@ unexpected files/names, read failures, or larger inventories produce
 list that could be mistaken for complete coverage. Existing secure-tree
 validation precedes inventory; this limit does not bound the entire doctor scan.
 
-Four Git/no-Git × transaction/rotation tests kill a real writer before journal
-publication. Doctor first observes its live lock and staging; recovery refuses
+The four legacy-unbound Git/no-Git × transaction/rotation fixtures kill a real
+writer before journal publication. Doctor first observes its live lock and staging; recovery refuses
 that live owner. After death, recovery releases the lock without claiming a
 completed journaled operation. Doctor must still report the exact staging path,
 leave all evidence unchanged, and retain access to the original live values.
@@ -102,7 +102,7 @@ changing the store.
 This inventory is a momentary observation, not an ownership or abandonment
 proof. A live writer may be using the directory, a valid recovery journal may
 need it, or an interrupted unpublished operation may have left it. Automatic
-orphan classification/removal and sibling full-restore staging remain open.
+cleanup of older unbound stages and sibling full-restore staging remains open.
 
 ## Destructive retirement and leftover key capsules
 
@@ -139,3 +139,49 @@ without guessing from filenames whether it contains a private key. Safe cleanup
 of those leftovers remains required work. The shared-lock contract coordinates
 Fulla/pa writers; this does not add same-Unix-user isolation or revoke external
 copies, backups, filesystem snapshots, or previously exported recovery archives.
+
+## Owned unpublished staging recovery
+
+Current transaction and rotation writers create an empty private stage, then
+persist its ID as `stage_id` in their owned `lock/info` before writing private
+staging material. Binding publication/durability must succeed before proceeding.
+An interruption before the binding can leave an empty unbound directory; it
+cannot leave private staging material written by these paths. Cleanup only owns
+a stage after its exclusive directory creation succeeds.
+
+The lock reader rejects duplicate/invalid IDs and simultaneous staging/peer
+receipt bindings. Recovery validates a pending journal against the binding;
+mismatched transaction/rotation IDs or a prune conflict fail closed. A published
+journal still follows its normal recovery procedure, preserving its staging.
+
+When no journal exists, explicit dead-owner recovery removes only the bound
+transaction directory and syncs its parent before releasing the lock. It never
+sweeps unrelated directories. Missing bound staging is safe to retry; unexpected
+non-directory evidence is refused. Ownership takeover preserves `stage_id`, so a
+failed or interrupted cleanup remains bound to the replacement owner/token.
+`staging_cleaned` identifies the handled stage in the recovery result. Handled
+pre-journal cleanup failures likewise retain the bound lock and report
+`recovery_required` rather than losing ownership by releasing it.
+
+Eight real killed-writer fixtures cover Git/no-Git × transaction/rotation ×
+current bound/reconstructed legacy unbound lock schemas. Current cases clean
+staging and return a healthy unchanged live store. Legacy cases only release the
+dead lock and leave staging visible. The legacy schema is reconstructed by
+removing the new binding from a killed current writer's fixture lock; this is
+not execution of an older binary. Non-root current cases also fail cleanup in
+a separate recovery process after validation, verify the changed owner/token
+retains the stage binding, then repair only fixture permissions and retry.
+Dropping the binding on takeover makes all four current cases fail.
+
+The initial permission fixture denied access before recovery validation and thus
+never exercised takeover. It was corrected to inject the filesystem denial after
+validation through the existing internal validation seam. There is no product
+environment flag for this injection. The four disposable failed-test directories
+were moved to Trash after restoring their directory permissions.
+
+This is an additive lock-record contract, not a domain-version migration. Older
+readers may ignore the field and release an unjournaled lock without cleanup;
+use a supporting Fulla binary to recover bound staging before rolling back.
+Previously unbound stages, foreign/remote/live owners, and sibling restore
+staging do not gain deletion authority. Physical power-loss and all interrupted
+cleanup boundaries still require separate acceptance.

@@ -83,3 +83,19 @@ restore/prune, duplicate-location refusal, and historical-binary recovery refusa
 The full acceptance matrix still tracks domain-upgrade transformations and their
 interruption boundaries, future transaction-domain writes, and release/stable
 operational gates. This policy does not declare those complete.
+
+## Additive staging ownership in lock records
+
+Current writers persist `stage_id` in `lock/info` after creating an empty stage
+and before placing private material there. Recovery preserves that binding when
+claiming a new owner token, validates it against any pending journal, and can
+remove only that bound stage when no journal exists. Malformed/duplicate IDs and
+conflicting peer-receipt bindings fail closed. This optional field leaves domain
+versions unchanged; it is not a migration engine.
+
+Old binaries may ignore the field and release the lock without cleaning the
+stage. Recover with a supporting binary before rollback. Unbound historical
+staging remains inspection-only, including the empty-directory window between
+creation and binding. See [journal publication](journal-publication.md) for
+killed-writer and failed-cleanup retry evidence and the synthetic legacy schema
+boundary. No distinct released-binary upgrade is claimed by these tests.

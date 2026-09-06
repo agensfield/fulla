@@ -102,7 +102,7 @@ func TestUnpublishedOperationReportsFailedStageCleanup(t *testing.T) {
 						}
 					}
 					for name := range after {
-						if _, existed := before[name]; !existed && !strings.HasPrefix(name, stage+"/") {
+						if _, existed := before[name]; !existed && !strings.HasPrefix(name, stage+"/") && !strings.HasPrefix(name, "lock/") {
 							t.Fatal("failure created file outside retained staging", name)
 						}
 					}
@@ -111,12 +111,11 @@ func TestUnpublishedOperationReportsFailedStageCleanup(t *testing.T) {
 							t.Fatal("fixture failed to retain staged private identity", err)
 						}
 					}
-					if owner, err := s.InspectLock(); err != nil || owner != nil {
-						t.Fatal("unpublished failure did not release its lock", err)
+					if owner, err := s.InspectLock(); err != nil || owner == nil || owner.StageID != filepath.Base(stage) || failure.Details["lock_retained"] != true || failure.Details["recovery_required"] != true {
+						t.Fatal("failed bound cleanup did not retain recovery ownership", err)
 					}
-					value, err := s.Read("entry")
-					if err != nil || string(value) != "original" {
-						t.Fatal("failed staging blocked unchanged live value", err)
+					if _, err := s.Read("entry"); err == nil {
+						t.Fatal("ordinary read ignored retained recovery lock")
 					}
 				})
 			}

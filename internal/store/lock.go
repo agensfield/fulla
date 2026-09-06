@@ -13,9 +13,10 @@ import (
 )
 
 type Lock struct {
-	store *Store
-	Token string
-	held  bool
+	store   *Store
+	Token   string
+	StageID string
+	held    bool
 }
 
 func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation, s.Validate) }

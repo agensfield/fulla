@@ -1623,3 +1623,32 @@ with only owned staging still pass; the combined race group took 31.8s, with
 store vet/diff checks passing. This is a retirement-safety fix, not automatic
 orphan cleanup or isolation from same-user/external copies. See the retirement
 section of journal-publication.md for evidence and applied-state boundaries.
+
+### Recover only an explicitly bound unpublished stage (2026-09-06)
+
+Transactions and rotations now persist stage_id in their owned lock after empty
+stage creation and before private staging writes. Dead-owner recovery preserves
+this ID through takeover and removes only that directory when no journal exists,
+syncing removal before lock release. Published journals retain their normal
+recovery path and must match the binding. Duplicate/invalid/conflicting bindings
+fail closed. A handled cleanup failure now retains a bound lock for retry instead
+of losing the ability to identify its leftover private stage.
+
+Eight Git/no-Git × transaction/rotation × bound/reconstructed-legacy killed-writer
+cases pass. Bound cases clean their stage; legacy unbound cases remain visible
+and untouched after lock release. A separate failed cleanup recovery process
+preserves the new owner token and stage ID, then a later retry succeeds after
+fixture-only permission repair. The original permission-denial fixture acted
+before validation, so it tested refusal instead of takeover; injection now occurs
+after validation through the internal seam. Four failed-test fixture directories
+were safely moved to Trash. Dropping the binding during takeover fails all four
+current-writer cases. Malformed-binding, conflicting-journal and changed-owner
+fixtures pass without altering evidence.
+
+Full repository go test -race ./... and go vet ./... passed with Go 1.26.0
+(store suite 259.4s), along with diff checks. Prior 9719127 passed Linux/macOS CI
+34001517182. This additive lock-info field is not a domain migration. Old readers
+may ignore it, so use a supporting binary for bound cleanup before rollback.
+Unbound historical staging, the empty pre-binding creation window, sibling full
+restore stages, all cleanup crash boundaries and physical power-loss proof remain
+open. See journal-publication.md and metadata-compatibility.md.

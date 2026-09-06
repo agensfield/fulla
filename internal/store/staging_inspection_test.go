@@ -3,14 +3,17 @@ package store
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,74 +25,159 @@ import (
 func TestDoctorReportsUnjournaledKilledWriterStaging(t *testing.T) {
 	for _, git := range []bool{false, true} {
 		for _, rotation := range []bool{false, true} {
-			t.Run(fmt.Sprintf("git=%t/rotation=%t", git, rotation), func(t *testing.T) {
-				s := fixture(t, git)
-				for _, name := range []string{"a", "entry"} {
-					if _, err := s.Write(name, []byte("unchanged"), false); err != nil {
+			for _, legacy := range []bool{false, true} {
+				t.Run(fmt.Sprintf("git=%t/rotation=%t/legacy=%t", git, rotation, legacy), func(t *testing.T) {
+					s := fixture(t, git)
+					for _, name := range []string{"a", "entry"} {
+						if _, err := s.Write(name, []byte("unchanged"), false); err != nil {
+							t.Fatal(err)
+						}
+					}
+					helper, prefix, readyText := "TestTransactionCrashHelper", "FULLA_TRANSACTION_", "transaction-ready"
+					if rotation {
+						helper, prefix, readyText = "TestRotationCrashHelper", "FULLA_ROTATION_", "rotation-ready"
+					}
+					cmd := exec.Command(os.Args[0], "-test.run=^"+helper+"$")
+					cmd.Env = append(os.Environ(), prefix+"FIXTURE="+s.Dir, prefix+"PHASE=staged")
+					pipe, err := cmd.StdoutPipe()
+					if err != nil {
 						t.Fatal(err)
 					}
-				}
-				helper, prefix, readyText := "TestTransactionCrashHelper", "FULLA_TRANSACTION_", "transaction-ready"
-				if rotation {
-					helper, prefix, readyText = "TestRotationCrashHelper", "FULLA_ROTATION_", "rotation-ready"
-				}
-				cmd := exec.Command(os.Args[0], "-test.run=^"+helper+"$")
-				cmd.Env = append(os.Environ(), prefix+"FIXTURE="+s.Dir, prefix+"PHASE=staged")
-				pipe, err := cmd.StdoutPipe()
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := cmd.Start(); err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
-				ready := make(chan bool, 1)
-				go func() { scanner := bufio.NewScanner(pipe); ready <- scanner.Scan() && scanner.Text() == readyText }()
-				select {
-				case ok := <-ready:
-					if !ok {
-						t.Fatal("writer did not stage")
+					if err := cmd.Start(); err != nil {
+						t.Fatal(err)
 					}
-				case <-time.After(20 * time.Second):
-					t.Fatal("writer readiness timed out")
-				}
-				live, err := s.Doctor(false)
-				if err != nil || live.Healthy || len(live.Staging) != 1 || live.Lock == nil || !live.Lock.Alive {
-					t.Fatal("live staging not visible", err)
-				}
-				if _, err := s.Recover(live.Lock.Token); err == nil {
-					t.Fatal("recovery stole live writer")
-				}
-				if err := cmd.Process.Kill(); err != nil {
-					t.Fatal(err)
-				}
-				_ = cmd.Wait()
-				result, err := s.Recover(live.Lock.Token)
-				if err != nil || result["lock_released"] != true || result["recovered"] != false {
-					t.Fatal("unjournaled recovery should only release dead lock", result, err)
-				}
-				before := transactionFiles(t, s)
-				report, err := s.Doctor(false)
-				if err != nil || report.Healthy || report.Lock != nil || !reflect.DeepEqual(report.Staging, live.Staging) || !slices.Contains(report.Issues, "transaction.staging_present") {
-					t.Fatal("unlocked leftover staging hidden by healthy report", report, err)
-				}
-				if !reflect.DeepEqual(before, transactionFiles(t, s)) {
-					t.Fatal("doctor changed leftover evidence")
-				}
-				if rotation {
-					if _, err := s.Root.Lstat(report.Staging[0] + "/after/identities"); err != nil {
-						t.Fatal("rotation fixture has no retained private identity", err)
+					t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+					ready := make(chan bool, 1)
+					go func() { scanner := bufio.NewScanner(pipe); ready <- scanner.Scan() && scanner.Text() == readyText }()
+					select {
+					case ok := <-ready:
+						if !ok {
+							t.Fatal("writer did not stage")
+						}
+					case <-time.After(20 * time.Second):
+						t.Fatal("writer readiness timed out")
 					}
-					proveOrphanRetirementRisk(t, s, report.Staging[0])
-				}
-				for _, name := range []string{"a", "entry"} {
-					value, err := s.Read(name)
-					if err != nil || string(value) != "unchanged" {
-						t.Fatal("unjournaled interruption changed live values", err)
+					live, err := s.Doctor(false)
+					if err != nil || live.Healthy || len(live.Staging) != 1 || live.Lock == nil || !live.Lock.Alive {
+						t.Fatal("live staging not visible", err)
 					}
-				}
-			})
+					if _, err := s.Recover(live.Lock.Token); err == nil {
+						t.Fatal("recovery stole live writer")
+					}
+					if err := cmd.Process.Kill(); err != nil {
+						t.Fatal(err)
+					}
+					_ = cmd.Wait()
+					if legacy {
+						// Reconstruct the predecessor's unbound lock-info schema only.
+						// This remains a killed current writer, not an old-binary test.
+						data, err := securefs.Read(s.Root, "lock/info", 4096)
+						if err != nil {
+							t.Fatal(err)
+						}
+						data = []byte(strings.ReplaceAll(string(data), " stage_id="+live.Lock.StageID, ""))
+						if err := securefs.Replace(s.Root, "lock/info", data); err != nil {
+							t.Fatal(err)
+						}
+					}
+					token := live.Lock.Token
+					if !legacy && os.Geteuid() != 0 {
+						stage := live.Staging[0]
+						t.Cleanup(func() {
+							_ = os.Chmod(filepath.Join(s.Dir, stage), 0700)
+							_ = os.Chmod(filepath.Join(s.Dir, stage, "after"), 0700)
+						})
+						ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+						defer cancel()
+						recovery := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStagingCleanupRecoveryFailureHelper$")
+						recovery.Env = append(os.Environ(), "FULLA_STAGING_RECOVERY_FIXTURE="+s.Dir)
+						if err := recovery.Run(); err == nil || ctx.Err() != nil {
+							t.Fatal("expected bounded failed cleanup", err)
+						}
+						owner, err := s.InspectLock()
+						if err != nil || owner == nil || owner.Alive || owner.Token == token || owner.StageID != live.Lock.StageID {
+							t.Fatal("failed recovery lost staging binding or owner transition", err)
+						}
+						token = owner.Token
+						for _, dir := range []string{stage, stage + "/after"} {
+							if err := os.Chmod(filepath.Join(s.Dir, dir), 0700); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
+					result, err := s.Recover(token)
+					if err != nil || result["lock_released"] != true || result["recovered"] != !legacy {
+						t.Fatal("incorrect bound/unbound recovery", result, err)
+					}
+					before := transactionFiles(t, s)
+					report, err := s.Doctor(false)
+					if !legacy {
+						if err != nil || !report.Healthy || len(report.Staging) != 0 || result["staging_cleaned"] != live.Lock.StageID {
+							t.Fatal("bound staging was not cleaned", report, err)
+						}
+						if !reflect.DeepEqual(before, transactionFiles(t, s)) {
+							t.Fatal("doctor mutated cleaned store")
+						}
+						for _, name := range []string{"a", "entry"} {
+							value, err := s.Read(name)
+							if err != nil || string(value) != "unchanged" {
+								t.Fatal("cleanup changed live value", err)
+							}
+						}
+						return
+					}
+					if err != nil || report.Healthy || report.Lock != nil || !reflect.DeepEqual(report.Staging, live.Staging) || !slices.Contains(report.Issues, "transaction.staging_present") {
+						t.Fatal("unlocked leftover staging hidden by healthy report", report, err)
+					}
+					if !reflect.DeepEqual(before, transactionFiles(t, s)) {
+						t.Fatal("doctor changed leftover evidence")
+					}
+					if rotation {
+						if _, err := s.Root.Lstat(report.Staging[0] + "/after/identities"); err != nil {
+							t.Fatal("rotation fixture has no retained private identity", err)
+						}
+						proveOrphanRetirementRisk(t, s, report.Staging[0])
+					}
+					for _, name := range []string{"a", "entry"} {
+						value, err := s.Read(name)
+						if err != nil || string(value) != "unchanged" {
+							t.Fatal("unjournaled interruption changed live values", err)
+						}
+					}
+				})
+			}
 		}
+	}
+}
+
+func TestStagingCleanupRecoveryFailureHelper(t *testing.T) {
+	dir := os.Getenv("FULLA_STAGING_RECOVERY_FIXTURE")
+	if dir == "" {
+		return
+	}
+	s, err := Open(dir, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	owner, err := s.InspectLock()
+	if err != nil || owner == nil || owner.StageID == "" {
+		t.Fatal("missing staged owner", err)
+	}
+	_, err = s.recover(owner.Token, func() error {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+		stage := metadata + "/transactions/" + owner.StageID
+		for _, name := range []string{stage, stage + "/after"} {
+			if err := os.Chmod(filepath.Join(s.Dir, name), 0500); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

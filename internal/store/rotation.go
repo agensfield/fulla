@@ -117,6 +117,9 @@ func (s *Store) rotate(destroy bool, ack string, compromise bool, hook func(stri
 		return result, err
 	}
 	ownedStage = dir
+	if err := s.bindStaging(lock, id); err != nil {
+		return result, err
+	}
 	j := Rotation{Version: 1, ID: id, Phase: "prepared", Started: time.Now().UTC().Format(time.RFC3339Nano), OldFingerprint: old.Fingerprint, NewFingerprint: crypt.Fingerprint(public), Retired: metadata + "/retired/" + id + ".age", Destroy: destroy, Compromise: compromise, Changes: []RotationChange{}}
 	if enabled, _ := s.GitEnabled(); enabled {
 		j.GitBefore, err = s.Head()

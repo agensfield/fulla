@@ -84,6 +84,9 @@ func (s *Store) mutate(lock *Lock, command string, values map[string][]byte, hoo
 		return result, err
 	}
 	ownedStage = dir
+	if err := s.bindStaging(lock, id); err != nil {
+		return result, err
+	}
 	for _, sub := range []string{"before", "after"} {
 		if err := s.Root.Mkdir(dir+"/"+sub, 0o700); err != nil {
 			return result, err
