@@ -72,3 +72,34 @@ These are handled-failure tests on disposable non-root fixtures, not SIGKILL
 cleanup or an automatic orphan-removal mechanism. Unpublished leftover staging
 has no committed recovery journal. Do not infer that ordinary recovery will
 finish or discard it; automatic identification and safe cleanup remain open.
+
+## Read-only staging inventory
+
+Doctor now reports `staging` as sorted paths relative to the store and adds
+`transaction.staging_present` when the understood transaction directory is
+nonempty. The report is unhealthy even if no lock or pending journal remains.
+Human failure output labels these paths as inspection evidence, explicitly not
+deletion authority. Inventory reads directory entries only, not their private
+contents, and creates no lock or cleanup mutation.
+
+The inventory accepts only version-1 transaction metadata and valid transaction
+ID directories, with a 1024-directory inspection limit. Unknown versions,
+unexpected files/names, read failures, or larger inventories produce
+`transaction.staging_unavailable` and an unhealthy result rather than a partial
+list that could be mistaken for complete coverage. Existing secure-tree
+validation precedes inventory; this limit does not bound the entire doctor scan.
+
+Four Git/no-Git × transaction/rotation tests kill a real writer before journal
+publication. Doctor first observes its live lock and staging; recovery refuses
+that live owner. After death, recovery releases the lock without claiming a
+completed journaled operation. Doctor must still report the exact staging path,
+leave all evidence unchanged, and retain access to the original live values.
+The rotation cases retain a generated staged private identity. A negative
+control suppressing inventory once unlocked makes all four cases fail.
+Unknown-domain, unexpected-file and over-limit fixtures also fail closed without
+changing the store.
+
+This inventory is a momentary observation, not an ownership or abandonment
+proof. A live writer may be using the directory, a valid recovery journal may
+need it, or an interrupted unpublished operation may have left it. Automatic
+orphan classification/removal and sibling full-restore staging remain open.

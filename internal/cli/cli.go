@@ -133,6 +133,9 @@ func (a *App) failure(command string, jsonMode bool, err error) int {
 			for _, issue := range report.Issues {
 				fmt.Fprintf(a.Err, "  issue: %q\n", issue)
 			}
+			for _, staging := range report.Staging {
+				fmt.Fprintf(a.Err, "  staging to inspect (not deletion authority): %q\n", staging)
+			}
 			if report.Lock != nil {
 				fmt.Fprintf(a.Err, "  lock owner: pid=%d local=%t alive=%t token=%q\n", report.Lock.PID, report.Lock.Local, report.Lock.Alive, report.Lock.Token)
 			}

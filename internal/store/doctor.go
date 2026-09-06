@@ -32,6 +32,7 @@ type DoctorResult struct {
 	Issues          []string             `json:"issues"`
 	Backups         *BackupSummary       `json:"backups"`
 	Peers           int                  `json:"peers"`
+	Staging         []string             `json:"staging,omitempty"`
 }
 
 // structuralIdentity never attempts key unwrapping. It permits the public age
@@ -64,6 +65,14 @@ func (s *Store) Doctor(deep bool) (DoctorResult, error) {
 		return r, err
 	}
 	r.Entries = len(names)
+	r.Staging, err = s.inspectStaging()
+	if err != nil {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "transaction.staging_unavailable")
+	} else if len(r.Staging) != 0 {
+		r.Healthy = false
+		r.Issues = append(r.Issues, "transaction.staging_present")
+	}
 	if err := s.Unlocked(); err != nil {
 		r.Healthy = false
 		if lock == nil {

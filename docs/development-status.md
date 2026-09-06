@@ -1585,3 +1585,23 @@ This does not implement automatic SIGKILL orphan discovery/removal. A cleanup
 path can describe partially removed staging or uncertain deletion durability;
 no false guarantee of complete retained data is made. Prior 25b46f6 passed both
 platforms in CI 34000815401.
+
+### Doctor exposes leftover transaction staging (2026-09-06)
+
+Doctor previously reported healthy once a pre-journal killed writer's lock was
+released, despite retained staging (including a generated rotation identity).
+It now lists sorted relative staging paths and reports transaction.staging_present
+as unhealthy. Human output identifies inspection evidence, not deletion authority.
+Only known transaction metadata and valid ID directories are inventoried, with
+a 1024-directory limit; unknown domains/unexpected paths/over-limit scans report
+staging_unavailable and no partial list. The existing whole-tree safety scan is
+not bounded by this new inventory limit.
+
+Four actual killed-writer cases cover Git/no-Git transactions and rotations,
+live-owner refusal, dead-lock release, unchanged live values, retained identity
+staging and mutation-free doctor inspection. Hiding staging after lock release
+in a source overlay breaks all four. Unsupported-domain, unexpected-file and
+limit fixtures preserve their evidence while reporting unhealthy. Doctor,
+cleanup and structural/deep checks passed under race (18.3s); CLI doctor/cleanup/
+panic checks and store/CLI vet passed. Automatic orphan ownership/cleanup and
+sibling full-restore staging discovery remain open; see journal-publication.md.
