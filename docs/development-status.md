@@ -2298,3 +2298,16 @@ other packages cached), followed by full vet.
 Predecessor f9de8f4 CI 34013360497 passed Linux/macOS. Legacy unbound copies,
 general final lock-removal interruption and physical power-loss acceptance remain
 open. See archive-recovery.md and the acceptance matrix.
+
+
+### Native run inherited-signal defect (2026-09-06)
+
+Restore bb4090b passed full local race/vet. The next contract audit found actual
+signal-state loss: direct exec preserves blocked/ignored SIGTERM, while Fulla
+loses both. Go startup changes that state before main, and syscall.Exec does not
+restore it. The strict five-case native probe records the failed parity with
+positive direct controls, retained PID and unchanged store. It exits 1 rather
+than blessing the current behavior; it is not yet a passing CI gate. Ruff and
+basedpyright pass. See run-signal-inheritance.md for pinned-runtime evidence,
+macOS-only observations and the startup/distribution constraints on a real fix.
+No runtime workaround or weaker signal contract was introduced.

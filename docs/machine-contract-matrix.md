@@ -157,3 +157,13 @@ which repeats it under the shared lock before decryption. Invalid selectors
 therefore leave the descriptor untouched too. A successful preflight is advisory:
 a cooperating writer may change the inventory before the locked recheck, which
 can still refuse after recovery input was supplied.
+
+## Reproduced inherited-signal defect
+
+The [native signal inheritance audit](run-signal-inheritance.md) now replaces
+uncertainty with a concrete failure: on macOS/arm64, the direct-exec control
+preserves blocked/ignored SIGTERM while Fulla loses both during Go startup.
+The strict acceptance-run-signals.py probe exits 1; SIGUSR1 masking and ignored
+SIGHUP/SIGINT controls pass, with PID and unchanged-store checks. This is an open
+implementation gap against native run semantics. Existing delivered-signal and
+terminal tests do not establish inherited-state parity.
