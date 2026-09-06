@@ -238,7 +238,7 @@ func (s *Store) requireCleanRetirementStaging(ownedID string) error {
 		}
 	}
 	if len(other) != 0 {
-		err := fault.New("identity.staging_present", "inspect leftover transaction staging with fulla doctor before destructive identity rotation")
+		err := fault.New("identity.staging_present", "inspect leftover key or transaction staging with fulla doctor before destructive identity rotation")
 		err.Details["staging"] = other
 		if ownedID == "" {
 			err.Details["applied"] = false

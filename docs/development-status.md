@@ -2099,3 +2099,21 @@ completion content, brew test and cleanup. Artifact hashes and fixture/base
 commit IDs are recorded in distribution.md; release_acceptance remains false. Ordinary predecessor CI runs 34009680033 (0252574) and 34009496848
 (44e3570) passed on Linux/macOS. Metadata/recovery and actual release/tap gates
 remain open.
+
+## 2026-09-06: Atomic key-copy staging retirement guard
+
+The private-copy audit found that securefs atomic publication can leave a
+.fulla-stage-* file beside identities or retired keys after a crash, while the
+retirement guard inspected only transaction directories. Expanded read-only
+staging inspection to both key-bearing directories, with bounded batched reads.
+Destructive rotation and destructive journal recovery now refuse these extra
+copies and preserve their evidence; doctor reports their paths without contents.
+No prefix-based cleanup authority was added.
+
+Git/no-Git reconstructed atomic-file and journal-recovery tests pass (3.809s).
+A previous-inspection overlay detects the missed key-copy locations in both
+diagnostics and recovery. Full store/CLI race tests passed (284.497s / 58.624s),
+followed by full-project vet. The new
+private-copy-audit.md records disk locations, material, ownership and remaining
+unbound init/restore/atomic staging. Predecessor CI runs 34010046371 and
+34009914035 passed on Linux/macOS. Migration and release gates remain open.
