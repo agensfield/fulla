@@ -87,3 +87,52 @@ func TestStagingBindingRejectsConflictingJournalAndMalformedOwner(t *testing.T) 
 		})
 	}
 }
+
+func TestUnpublishedCleanupPreservesStageWhenOwnershipChanges(t *testing.T) {
+	for _, kind := range []string{"owner", "binding", "missing-owner", "invalid-info"} {
+		t.Run(kind, func(t *testing.T) {
+			s := fixture(t, false)
+			lock, err := s.Lock("fixture")
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := securefs.ID()
+			dir := metadata + "/transactions/" + id
+			if err := s.Root.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.bindStaging(lock, id); err != nil {
+				t.Fatal(err)
+			}
+			if err := securefs.WriteNew(s.Root, dir+"/private-fixture", []byte("retained-private-evidence")); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "owner":
+				err = securefs.Replace(s.Root, "lock/owner", []byte("replacement-owner\n"))
+			case "missing-owner":
+				err = s.Root.Remove("lock/owner")
+			case "binding":
+				var data []byte
+				data, err = securefs.Read(s.Root, "lock/info", 4096)
+				if err == nil {
+					err = securefs.Replace(s.Root, "lock/info", []byte(strings.ReplaceAll(string(data), id, securefs.ID())))
+				}
+			case "invalid-info":
+				err = securefs.Replace(s.Root, "lock/info", []byte("invalid\n"))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := transactionFiles(t, s)
+			err = s.finishUnpublished(lock, dir, errors.New("synthetic-private-original-error"))
+			if !reflect.DeepEqual(before, transactionFiles(t, s)) {
+				t.Fatal("cleanup deleted evidence after ownership changed")
+			}
+			var failure *fault.Error
+			if !errors.As(err, &failure) || failure.Code != "transaction.cleanup_failed" || failure.Details["ownership_changed"] != true || failure.Details["lock_cleanup_required"] != true || failure.Details["staging_cleanup_required"] != true || failure.Details["lock_retained"] != nil {
+				t.Fatal("lost changed ownership evidence", err)
+			}
+		})
+	}
+}

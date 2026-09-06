@@ -1652,3 +1652,18 @@ may ignore it, so use a supporting binary for bound cleanup before rollback.
 Unbound historical staging, the empty pre-binding creation window, sibling full
 restore stages, all cleanup crash boundaries and physical power-loss proof remain
 open. See journal-publication.md and metadata-compatibility.md.
+
+### Check ownership before deleting unpublished staging (2026-09-06)
+
+Cleanup previously checked ownership only when releasing the lock, after deleting
+staging. It now verifies the token, stage binding and absence of conflicting peer
+binding before deletion. Changed/missing/malformed ownership returns inspection
+requirements while preserving all stage/lock evidence, without claiming the
+original owner retained authority. Four fixtures cover token/binding changes and
+missing/corrupt owner data; removing the check makes all four detect deletion.
+
+Combined cleanup/binding/killed-writer/published-journal race tests passed (21.7s),
+plus the final targeted ownership race check and store vet. This preserves the
+cooperative shared-lock contract, not same-user isolation. See the ownership
+section of journal-publication.md. The full-spec goal and broader human-facing
+acceptance work remain active.

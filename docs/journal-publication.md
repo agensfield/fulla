@@ -185,3 +185,19 @@ use a supporting Fulla binary to recover bound staging before rolling back.
 Previously unbound stages, foreign/remote/live owners, and sibling restore
 staging do not gain deletion authority. Physical power-loss and all interrupted
 cleanup boundaries still require separate acceptance.
+
+## Ownership check before handled cleanup
+
+Before deleting an owned unpublished stage, cleanup now re-reads the lock and
+requires its owner token and stage binding to match the operation's handle,
+without a conflicting peer receipt. Missing/malformed owner records or changed
+ownership leave all staging and lock evidence untouched. The cleanup error
+reports `ownership_changed`, staging/lock inspection requirements, and does not
+claim `lock_retained` under the original owner's authority.
+
+Previously the lock check occurred only during release, after staging deletion.
+Four tests change the token, change the bound stage ID, remove the owner record,
+or corrupt lock info. Every refusal preserves the exact file inventory/digests.
+Removing the pre-cleanup check makes all four tests detect deleted evidence.
+This is a cooperative ownership check, not an atomic barrier against malicious
+same-Unix-user mutation between validation and filesystem operations.

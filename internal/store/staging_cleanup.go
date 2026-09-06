@@ -74,6 +74,15 @@ func (s *Store) bindStaging(lock *Lock, id string) error {
 func (s *Store) finishUnpublished(lock *Lock, dir string, original error) error {
 	var cleanupErr error
 	if dir != "" {
+		owner, err := s.InspectLock()
+		if err != nil || owner == nil || owner.Token != lock.Token || owner.StageID != lock.StageID || owner.PeerReceipt != "" {
+			failure := unpublishedCleanupFailure(original)
+			failure.Details["staging_path"] = filepath.Join(s.Dir, dir)
+			failure.Details["staging_cleanup_required"] = true
+			failure.Details["lock_cleanup_required"] = true
+			failure.Details["ownership_changed"] = true
+			return failure
+		}
 		cleanupErr = s.Root.RemoveAll(dir)
 		if cleanupErr == nil {
 			cleanupErr = securefs.SyncDir(s.Root, filepath.Dir(dir))
@@ -86,9 +95,7 @@ func (s *Store) finishUnpublished(lock *Lock, dir string, original error) error 
 	if cleanupErr == nil && releaseErr == nil {
 		return original
 	}
-	err := fault.New("transaction.cleanup_failed", "could not confirm cleanup of an unpublished operation")
-	err.Details["applied"] = false
-	err.Details["cleanup_required"] = true
+	err := unpublishedCleanupFailure(original)
 	if cleanupErr != nil {
 		err.Details["staging_path"] = filepath.Join(s.Dir, dir)
 		err.Details["staging_cleanup_required"] = true
@@ -100,6 +107,13 @@ func (s *Store) finishUnpublished(lock *Lock, dir string, original error) error 
 	if releaseErr != nil {
 		err.Details["lock_cleanup_required"] = true
 	}
+	return err
+}
+
+func unpublishedCleanupFailure(original error) *fault.Error {
+	err := fault.New("transaction.cleanup_failed", "could not confirm cleanup of an unpublished operation")
+	err.Details["applied"] = false
+	err.Details["cleanup_required"] = true
 	var previous *fault.Error
 	if errors.As(original, &previous) {
 		err.Details["operation_code"] = previous.Code
