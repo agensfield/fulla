@@ -174,6 +174,14 @@ no plugin/input/confirmation invocation, and unchanged paths, modes and bytes.
 A previous-source overlay makes interactive edit attempt decryption and fail the
 regression. Existing future-backup CRUD/snapshot cases remain positive coverage.
 
-This is a store-operation boundary. It does not prove that every CLI input channel
-is untouched before entering the store API, and it does not solve future
-transaction-domain writes or introduce a metadata migration.
+The CLI also calls the advisory domain check before add/edit input and before
+selecting logical-import identities or passphrases. Forty Git/no-Git cases in
+`internal/cli/mutation_input_test.go` cover JSON/noninteractive add/edit stdin and
+inherited descriptors, plus import passphrase descriptors. Refusal leaves selected
+FDs open at offset zero, never reads stdin, and preserves file bytes/modes. A
+previous-CLI overlay consumes/closes the import passphrase descriptor and fails
+the regression. Store locked/publication checks remain authoritative.
+
+These selected channels are bounded evidence, not every possible CLI input or
+racing state change. Future transaction-domain writes and real domain migrations
+remain unresolved.

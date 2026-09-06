@@ -423,6 +423,9 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if !exists && p.Command == "edit" {
 			return nil, false, fault.New("entry.not_found", "entry does not exist; use add")
 		}
+		if err := s.CheckMutationDomains(); err != nil {
+			return nil, false, err
+		}
 		if !p.has("stdin") && !p.has("from-fd") && !p.has("generate") {
 			if p.has("json") || p.has("non-interactive") {
 				return nil, false, fault.Interaction("provide --stdin, --from-fd N, or --generate")

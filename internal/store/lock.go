@@ -25,16 +25,22 @@ func (s *Store) Lock(operation string) (*Lock, error) { return s.lock(operation,
 // requesting input or decrypting. Repeat the check under the shared lock, and
 // leave mutate's publication-time check in place for long-lived callers.
 func (s *Store) lockMutation(operation string) (*Lock, error) {
-	if _, err := s.transactionSnapshotDomain(); err != nil {
+	if err := s.CheckMutationDomains(); err != nil {
 		return nil, err
 	}
 	return s.lock(operation, func() error {
 		if err := s.Validate(); err != nil {
 			return err
 		}
-		_, err := s.transactionSnapshotDomain()
-		return err
+		return s.CheckMutationDomains()
 	})
+}
+
+// CheckMutationDomains lets callers refuse unavailable entry mutations before
+// consuming secret input. It is advisory; lockMutation and mutate revalidate.
+func (s *Store) CheckMutationDomains() error {
+	_, err := s.transactionSnapshotDomain()
+	return err
 }
 
 func (s *Store) lock(operation string, validate func() error) (*Lock, error) {

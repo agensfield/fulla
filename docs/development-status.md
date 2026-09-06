@@ -2168,3 +2168,22 @@ See metadata-compatibility.md for exact scope: store API preflight is not proof
 of every CLI channel, and future transaction writes/domain migrations remain open.
 The no-Git irreversible-delete versus retained-backup conflict was returned to
 Arda for a product decision; no retention policy was changed.
+
+
+## 2026-09-06: Preserve selected CLI input on domain refusal
+
+Extended the store mutation-domain preflight into add/edit before input selection
+and logical import before recovery identities/passphrases. The exported advisory
+check shares the same policy as locked validation; publication still rechecks.
+This closes the CLI gap explicitly left by the preceding store-layer fix without
+changing supported metadata versions or persistent formats.
+
+Forty Git/no-Git cases cover JSON/noninteractive stdin, inherited value FDs and
+import passphrase FDs. They require typed metadata.unsupported, no stdin reads,
+selected descriptors still open at offset zero, and unchanged paths/modes/bytes.
+The previous CLI overlay consumes/closes the import passphrase FD and fails with
+bad file descriptor, proving the detector observes the original ordering bug.
+Targeted CLI race passed (4.183s); full CLI/remote race passed (56.701s / 61.187s),
+scoped store domain/refusal/positive future-backup cases passed (14.610s), and
+full-project vet passed. Other channel/configuration ordering, domain migrations,
+unbound staging and release work remain open. No live credentials were used.

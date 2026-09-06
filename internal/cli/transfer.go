@@ -99,6 +99,11 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 	if len(p.Args) != 1 {
 		return nil, fault.Usage(p.Command + " requires one encrypted bundle path")
 	}
+	if p.Command == "transfer import" {
+		if err := s.CheckMutationDomains(); err != nil {
+			return nil, err
+		}
+	}
 	ids, err := transferIdentities(p, s)
 	if err != nil {
 		return nil, err
