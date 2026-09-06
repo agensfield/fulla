@@ -2311,3 +2311,19 @@ than blessing the current behavior; it is not yet a passing CI gate. Ruff and
 basedpyright pass. See run-signal-inheritance.md for pinned-runtime evidence,
 macOS-only observations and the startup/distribution constraints on a real fix.
 No runtime workaround or weaker signal contract was introduced.
+
+
+### Pending-signal regression rejects incomplete bootstrap (2026-09-06)
+
+Both restore bb4090b CI 34014436153 and audit 79377c6 CI 34014675730 passed
+Linux/macOS. A Reset overlay did not repair inherited SIGTERM. A disposable
+native constructor/same-binary exec prototype preserved all five initial cases
+and passed existing PTY Ctrl-C acceptance on macOS arm64 and Linux amd64.
+The established devbox fixture was removed and absence confirmed.
+
+The new pending-blocked SIGTERM case rejects that candidate: Go startup delivers
+the pending signal before the target, terminating both current Fulla and the
+prototype with -15, while direct exec preserves it. The strict six-case gate
+records route statuses and remains failing; Ruff/basedpyright pass. Runtime and
+CGO-free distribution remain unchanged. See run-signal-inheritance.md for the
+required preparation boundary and why final-state restoration is insufficient.

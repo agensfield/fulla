@@ -24,6 +24,7 @@ Each owned process has a bounded wait and is killed/reaped on timeout.
 | --- | --- | --- |
 | Blocked SIGUSR1 | Preserved | Preserved |
 | Blocked SIGTERM | Preserved | **Lost** |
+| Pending blocked SIGTERM | Preserved | **Terminates before target** |
 | Ignored SIGHUP | Preserved | Preserved |
 | Ignored SIGINT | Preserved | Preserved |
 | Ignored SIGTERM | Preserved | **Lost** |
@@ -69,3 +70,40 @@ and four-platform distribution, then run this strict gate on Linux and macOS and
 extend it to pending signals and job suspension/resumption. The gate is checked in
 as a reproducer but not wired into the currently passing CI; no release acceptance
 may treat that omission as native-signal completion.
+
+## Startup-hook experiment (2026-09-06)
+
+A source overlay adding signal.Reset before syscall.Exec still failed blocked and
+ignored SIGTERM. Reset is not an original-state restoration API.
+
+A disposable prototype then used a C constructor to capture the original signal
+mask and ignored dispositions before Go startup. Go performed syscall.Exec back
+into the same binary; its constructor restored that state and executed the target
+before Go initialization. This kept the supported syscall.Exec coordination,
+original PID, one binary, and no supervising target wrapper. The five initial
+signal cases and existing attached/detached PTY Ctrl-C gate passed on macOS arm64
+and the established Linux amd64 devbox. The Linux Fulla-only source/binary fixture
+was removed and absence confirmed. The prototype required CGO and is not adopted
+into the runtime or release packager. Local draft sources and receipts remain in
+dist/run-signals-bootstrap; Linux emitted a write-result compiler warning, another
+reason the prototype is not represented as production-ready code.
+
+A sixth case disproves this design as a complete fix. The launcher blocks SIGTERM,
+queues it to itself, then execs the program. Direct execution preserves the pending
+signal; both stock Fulla and the prototype terminate with native status -15 during
+Go startup, before the target reports. The strict gate now includes that case and
+records both route statuses. Original-state capture and final restoration cannot
+prevent premature delivery while Go starts or prepares the target.
+
+The next design must protect the original process's pending and blocked signals
+through preparation, not merely reconstruct its final mask. An isolated native
+preparation boundary needs evaluation against target PID/terminal/group behavior,
+interactive plugin input, helper cleanup and public go-install/four-platform builds.
+No such mechanism is selected yet. Do not integrate the five-case passing
+prototype or alter CGO-free release tooling as though signal parity were solved.
+
+The expanded gate exits 1 for both current Fulla (three failures) and the prototype
+(one failure), with direct controls and unchanged store checks. Ruff and
+basedpyright pass without warnings. CI 34014436153 (restore bb4090b) and
+34014675730 (audit 79377c6) both passed Linux/macOS; neither executes this currently
+failing strict signal gate.

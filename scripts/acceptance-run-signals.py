@@ -15,8 +15,10 @@ _ = os.umask(0o077)
 launcher = """import os, signal, sys
 mode, name = sys.argv[1:3]
 sig = getattr(signal, name)
-if mode == 'blocked':
+if mode in ('blocked', 'pending'):
     signal.pthread_sigmask(signal.SIG_BLOCK, [sig])
+    if mode == 'pending':
+        os.kill(os.getpid(), sig)
 else:
     signal.signal(sig, signal.SIG_IGN)
 os.execv(sys.argv[3], sys.argv[3:])
@@ -26,6 +28,8 @@ mode, name = sys.argv[1:3]
 sig = getattr(signal, name)
 if mode == 'blocked':
     preserved = sig in signal.pthread_sigmask(signal.SIG_BLOCK, [])
+elif mode == 'pending':
+    preserved = sig in signal.pthread_sigmask(signal.SIG_BLOCK, []) and sig in signal.sigpending()
 else:
     preserved = signal.getsignal(sig) == signal.SIG_IGN
 print(json.dumps({'preserved': preserved, 'pid': os.getpid()}))
@@ -61,12 +65,14 @@ with tempfile.TemporaryDirectory(prefix="fulla-run-signals-") as temporary:
     for mode, name in [
         ("blocked", "SIGUSR1"),
         ("blocked", "SIGTERM"),
+        ("pending", "SIGTERM"),
         ("ignored", "SIGHUP"),
         ("ignored", "SIGINT"),
         ("ignored", "SIGTERM"),
     ]:
         assert hasattr(signal, name)
         observed: dict[str, bool] = {}
+        exits: dict[str, int] = {}
         for route in ("direct", "fulla"):
             command = [sys.executable, "-c", target, mode, name]
             if route == "fulla":
@@ -84,13 +90,18 @@ with tempfile.TemporaryDirectory(prefix="fulla-run-signals-") as temporary:
                 process.kill()
                 _ = process.communicate()
                 raise
-            assert process.returncode == 0 and not err, (route, mode, name)
-            report = cast(dict[str, object], json.loads(out))
-            assert report["pid"] == process.pid, "process image was not replaced"
-            assert isinstance(report["preserved"], bool)
-            observed[route] = report["preserved"]
+            assert not err, (route, mode, name)
+            exits[route] = process.returncode
+            if process.returncode == 0:
+                report = cast(dict[str, object], json.loads(out))
+                assert report["pid"] == process.pid, "process image was not replaced"
+                assert isinstance(report["preserved"], bool)
+                observed[route] = report["preserved"]
+            else:
+                assert not out, "failed signal probe emitted unexpected output"
+                observed[route] = False
         assert observed["direct"], "direct-exec control did not preserve fixture state"
-        results.append({"mode": mode, "signal": name, **observed})
+        results.append({"mode": mode, "signal": name, **observed, "exit": exits})
     assert inventory() == before, "signal probes changed the store"
 passed = all(row["fulla"] is True for row in results)
 print(json.dumps({"native_signal_parity": passed, "cases": results, "store_unchanged": True}))

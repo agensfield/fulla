@@ -167,3 +167,9 @@ The strict acceptance-run-signals.py probe exits 1; SIGUSR1 masking and ignored
 SIGHUP/SIGINT controls pass, with PID and unchanged-store checks. This is an open
 implementation gap against native run semantics. Existing delivered-signal and
 terminal tests do not establish inherited-state parity.
+
+The strict probe now also queues blocked SIGTERM before exec. The direct control
+preserves it, but current Fulla terminates before the target. A same-binary native
+startup-hook prototype passed the initial five cases and PTY tests on macOS/Linux
+but failed this pending-signal case, so it was not adopted. The remaining work is
+an original-process preparation boundary, not simply a mask-reset call.
