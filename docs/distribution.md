@@ -95,3 +95,38 @@ and installed-binary/`brew test` acceptance. The intended user surface is
 `brew install agensfield/tap/fulla`; it is not available merely because the
 workflow and packaging code exist. No tag is created by either packaging or
 source-verification commands.
+
+## Homebrew formula generation
+
+After package acceptance and release provenance verification, render the scoped
+formula with an independently reviewed release version and commit:
+
+```sh
+python3 scripts/homebrew-formula.py dist/release 0.1.0 "$EXPECTED_COMMIT" > dist/fulla.rb
+ruby -c dist/fulla.rb
+```
+
+The generator rejects development versions, malformed identities, incomplete or
+duplicate checksum inventories, mismatched package hashes, symlinked package
+files, invalid binary archive member sets and binary SOURCE.json records that
+differ from the supplied release identity. It hashes all five archives and checks
+provenance in each of the four binary archives. It reads packages without
+executing binaries, extracting files, installing software or changing the tap.
+The rendered formula uses four explicit OS/CPU URLs and SHA-256 values, installs
+Bash/Zsh/Fish completions, and contains an isolated no-Git init/write/exact-read
+Homebrew test. Only stdout contains the formula; failure emits no formula text.
+
+This is additional preparation, not signature verification or complete artifact
+acceptance. In particular, hashing the source archive does not inspect its tree,
+and matching SOURCE.json does not cryptographically prove binary provenance.
+Continue to run the existing package/attestation gates. Then publish only Fulla's
+formula in the Agensfield tap and verify actual install, completions and
+`brew test` on the intended platforms. Those installation/publication gates are
+still open; synthetic fixture formula tests do not close them.
+
+`scripts/acceptance-formula.py` exercises valid, mismatched checksum, missing
+archive checksum, wrong commit/version, development version, injection, nonobject
+provenance and symlink cases, then runs Ruby syntax validation. Linux/macOS CI runs
+this fixture gate. It deliberately uses synthetic archives, not installable
+release artifacts. Formula layout follows the [Homebrew cookbook](https://docs.brew.sh/Formula-Cookbook)
+and [completion API](https://docs.brew.sh/rubydoc/Formula.html#generate_completions_from_executable-instance_method).

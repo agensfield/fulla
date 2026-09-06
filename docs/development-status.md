@@ -1825,3 +1825,17 @@ The new gate, original interactive harness and ordered Git/no-Git human journeys
 pass locally. Ruff, basedpyright and actionlint pass. CI now runs the new gate on
 Linux/macOS. This is not inherited-mask, ignored-signal, suspension/resumption or
 all-terminal-mode proof; those boundaries remain explicit.
+
+### Homebrew formula preparation (2026-09-06)
+
+Added a read-only formula generator bound to explicit release version/commit,
+complete package checksums and each binary archive's provenance/member shape.
+It emits four OS/CPU asset selections, completion installation and an isolated
+no-Git write/read test. Development, malformed, mismatched and symlink cases fail
+without formula output. Nine synthetic cases, Ruby syntax, Ruff/basedpyright and
+actionlint pass; the fixture gate is in Linux/macOS CI. No new runtime dependency,
+local installation, tap mutation, tag or release was created.
+
+The generator is not artifact/signature verification: source-tree validation,
+binary provenance/attestation acceptance and actual installation remain the
+existing release gates. See distribution.md for the bounded checks and command.

@@ -40,6 +40,8 @@ jobs:
         run: go test -race -tags fulla_debug ./internal/cli -run '^TestPanicProcess' -count=1
       - name: Repeated initialization and pruning acceptance
         run: go test -race ./internal/cli -run ^TestBackupPruneCLIPreviewsBeforeExplicitApplication$ -count=20
+      - name: Homebrew formula generation
+        run: python3 scripts/acceptance-formula.py
       - name: Static analysis
         run: go vet ./...
       - name: Controlling-terminal acceptance
