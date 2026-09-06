@@ -21,7 +21,7 @@ No SIGKILL case is physical power-loss or filesystem durability proof.
 | Sync entry transfer | Authenticated remote session and scoped import, then per-store journal engine | [Cross-host retry](crosshost-acceptance.md) covers lost imported/exported replies and rerun convergence on Git/no-Git stores. Transport evidence does not cover every entry-publication boundary independently. |
 | Identity rotation | Bound transaction, verified new ciphertext/private material, journal, per-path publication, commit, private-copy cleanup | `rotation_crash_test.go`, `rotation_publication_test.go`, [owned publication](rotation-publication.md). Pre-binding and legacy unbound private-copy accounting remains separate. |
 | Snapshot prune | Independent prune journal, recursive snapshot deletion, receipt, cleanup | `prune_test.go`: prepared, removed, receipted kills; normal/basic namespaces and reconstructed partial recursive unlink. The reconstructed unlink is not an observed instruction-level kill. |
-| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Post-rename synchronization errors now retain applied-state evidence (below). Artifact-versus-receipt interruption and killed temporary-file/publication boundaries still need explicit acceptance. Stdout logical export has a different, non-atomic stream boundary. |
+| Logical/full archive export | External atomic artifact publication followed by in-store receipt | `PublishArtifact`, `ExportLogical`, `ExportFull` inspected. Post-rename synchronization errors now retain applied-state evidence (below). Twelve Git/no-Git native kills now cover completed encoding, published artifact and published receipt for logical/full export (below). Low-level temporary-file/publication windows and receipt reconstruction remain open. Stdout logical export has a different, non-atomic stream boundary. |
 | Full archive restore | Independently authenticated complete archive in bound sibling stage, target publication | [Archive recovery](archive-recovery.md): 44 handled/SIGKILL cases across Git modes and absent/empty targets, plus replacement-token cleanup retry. Legacy unbound stages remain separate. |
 | Permission repair | Validated per-path mode changes, receipt, shared lock | `permissions_test.go` includes killed-owner recovery. Per-chmod and receipt boundaries need enumeration; a partially repaired tree is an explicitly recoverable intermediate state. |
 | Doctor recovery | Validated dead-owner takeover, operation-specific reconciliation, lock release | Binding/retry tests cover transactions, init/adopt/restore, peers, prune and rotation. Recovery is itself a mutation and requires its own refusal/retry evidence. |
@@ -72,3 +72,27 @@ Its internal publisher fixture models a post-publication failure; the securefs
 the actual post-rename synchronization callback. These are handled-error tests,
 not physical fsync failure or killed-export acceptance. Disabling the applied
 branch is the negative control and must fail the applied cases.
+
+## Native killed-export boundaries
+
+`TestKilledExportPreservesArtifactAndStore` runs twelve native subprocess cases:
+Git/no-Git stores, logical/full exports, and completed encoding, artifact publication
+or receipt publication. Private hooks are internal only; public methods pass nil.
+Encoding is complete in memory at its hook, before external staging begins.
+
+The parent refuses live-owner recovery, kills the exporter, refuses a wrong token,
+then explicitly releases the dead owner's lock. At the encoding boundary there is
+no external artifact. At either later boundary the artifact remains complete and
+private; logical verification/import or full restore recovers binary and empty
+entries. Full restore checks the entire archived tree against required 0600/0700
+modes, while the source tree retains its original bytes and modes. Retry against
+the existing artifact refuses without changing it. A receipted export adds exactly
+one matching applied receipt; earlier cases add none. No hidden temporary file is
+present at these three high-level boundaries.
+
+Recovery reports lock release, not reconstructed export completion: there is no
+bound export journal from which to recover a missing receipt after publication.
+This test explicitly preserves that limitation rather than inventing an applied
+receipt from the external output. Staging-write/rename/sync instruction windows,
+stdout partial writes, and durable export-to-receipt reconciliation still require
+separate work. A successful killed-process fixture is not power-loss proof.

@@ -53,6 +53,10 @@ func (s *Store) CheckExportSelection(names []string) error {
 // ExportLogical uses PAXFER1 framing inside age. The selector is validated in
 // full before the first entry is decrypted or any destination is created.
 func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output string, stdout io.Writer) (result TransferResult, err error) {
+	return s.exportLogical(names, recipients, output, stdout, nil)
+}
+
+func (s *Store) exportLogical(names []string, recipients []age.Recipient, output string, stdout io.Writer, hook func(string) error) (result TransferResult, err error) {
 	result.Skipped = []string{}
 	if len(recipients) == 0 {
 		return result, fault.Interaction("export requires an explicit recovery recipient")
@@ -116,6 +120,11 @@ func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output
 	if err := w.Close(); err != nil {
 		return result, err
 	}
+	if hook != nil {
+		if err := hook("encoded"); err != nil {
+			return result, err
+		}
+	}
 	result.Names = names
 	result.Entries = int(stats.Entries)
 	result.Bytes = stats.Bytes
@@ -129,11 +138,21 @@ func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output
 			return result, err
 		}
 	}
+	if hook != nil {
+		if err := hook("published"); err != nil {
+			return result, fault.Applied("export published but finalization interrupted", "export")
+		}
+	}
 	id := securefs.ID()
 	result.Receipt = metadata + "/receipts/" + id + ".json"
 	data, _ := json.Marshal(map[string]any{"version": 1, "command": "transfer export", "names": names, "entries": stats.Entries, "at": time.Now().UTC().Format(time.RFC3339Nano), "applied": true})
 	if err := securefs.PublishNew(s.Root, result.Receipt, data); err != nil {
 		return result, fault.Applied("export published but receipt finalization failed", id)
+	}
+	if hook != nil {
+		if err := hook("receipted"); err != nil {
+			return result, fault.Applied("export receipt published but finalization interrupted", id)
+		}
 	}
 	return result, nil
 }

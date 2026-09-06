@@ -31,6 +31,10 @@ type ArchiveResult struct {
 }
 
 func (s *Store) ExportFull(recipients []age.Recipient, output string) (result ArchiveResult, err error) {
+	return s.exportFull(recipients, output, nil)
+}
+
+func (s *Store) exportFull(recipients []age.Recipient, output string, hook func(string) error) (result ArchiveResult, err error) {
 	if err := s.RequireDomain("backup"); err != nil {
 		return result, err
 	}
@@ -143,8 +147,18 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 	if err := ageWriter.Close(); err != nil {
 		return result, err
 	}
+	if hook != nil {
+		if err := hook("encoded"); err != nil {
+			return result, err
+		}
+	}
 	if err := s.PublishArtifact(output, encrypted.Bytes()); err != nil {
 		return result, err
+	}
+	if hook != nil {
+		if err := hook("published"); err != nil {
+			return result, fault.Applied("full archive published but finalization interrupted", "export")
+		}
 	}
 	result.Path = output
 	result.Warning = "External archive copies cannot be revoked by deleting the local copy."
@@ -152,6 +166,11 @@ func (s *Store) ExportFull(recipients []age.Recipient, output string) (result Ar
 	receipt, _ := json.Marshal(map[string]any{"version": 1, "command": "backup export", "full": true, "files": result.Files, "at": time.Now().UTC().Format(time.RFC3339Nano), "applied": true})
 	if err := securefs.PublishNew(s.Root, metadata+"/receipts/"+id+".json", receipt); err != nil {
 		return result, fault.Applied("full archive published but receipt finalization failed", id)
+	}
+	if hook != nil {
+		if err := hook("receipted"); err != nil {
+			return result, fault.Applied("full archive receipt published but finalization interrupted", id)
+		}
 	}
 	return result, nil
 }

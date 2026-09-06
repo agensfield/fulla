@@ -2516,3 +2516,25 @@ regression passed under race in 1.391s; full-project vet passed, followed by sto
 vet after the fixture correction. Disabling the applied branch fails both applied
 cases with the original misleading export.publish_failed classification. This is
 handled-error evidence, not killed-export or hardware durability acceptance.
+
+## Native export interruption acceptance (2026-09-06)
+
+Twelve native SIGKILL cases now cover Git/no-Git logical/full exports after
+in-memory encoding, external artifact publication and receipt publication.
+Internal phase hooks are never runtime options. Tests refuse live-owner and
+wrong-token recovery, release the killed owner's lock, compare unchanged source
+bytes/modes apart from the one expected receipt, verify/import logical artifacts,
+restore complete full archives, and prove retry cannot replace the output.
+
+The first run found a fixture expectation mismatch on Git full restores: original
+Git objects can be 0400, while the archive contract recreates files at 0600.
+Path/digest diagnostics established identical bytes. The restored expectation now
+uses the existing normalized-mode archive helper, while source-store comparison
+still requires original modes. No production permission rule changed.
+
+The native matrix plus publication regression, scoped recovery, full disaster and
+composite restore passed under race in 58.104s; full-project vet passed. Recovery
+currently releases the dead export lock without reconstructing a missing receipt.
+Tests distinguish this from successful artifact verification; they do not invent
+completion metadata. Low-level staging/write/rename windows, stdout partial-write
+handling and durable receipt reconciliation remain explicit inventory gaps.
