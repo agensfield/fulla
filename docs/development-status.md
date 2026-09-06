@@ -1512,3 +1512,30 @@ race tests, CLI vet, actionlint, and diff checks passed locally with Go 1.26.0.
 Linux/macOS CI now tests both policies. Final artifact fault injection and
 independent goroutine/runtime containment remain open; this is not universal
 panic containment. Prior source `7f12148` passed Linux/macOS CI 33999820490.
+
+### Combined trust-change and decryption-sentinel journey (2026-09-06)
+
+`trust_journey_test.go` combines one-sided enrollment refusal, real server-key
+rotation, stale-pin refusal, explicit repin, captured-proof replay refusal,
+mutual dry-run, and successful exact-byte sync with shared-name preservation.
+All four Git/no-Git × supported-protocol combinations pass. During refusal
+stages, each side uses a sole synthetic plugin identity. The executable records
+an invocation and exits; positive entry reads prove the observer works. Refusals
+must leave it uninvoked and preserve all store paths, modes, and file digests.
+Restored generated native identities complete the successful half of the journey.
+
+Two Go overlays deliberately inserted early entry decryption into client/server
+paths. Both failed at the sentinel, proving the tests detect an ordering
+regression. No product runtime hook or cryptographic behavior changed. See
+[trust-change acceptance](trust-change-acceptance.md) for the fixture substitution
+and evidence boundaries. Whole remote race tests passed (50.3s), remote vet and
+diff checks passed. Prior facf6df passed both Linux/macOS CI jobs 34000210947.
+
+The future transaction-domain write policy remains unresolved: relaxing the
+version guard without an understood recovery protocol would be unsafe. Another
+literal spec conflict was escalated as an optional asynchronous decision:
+no-Git deletion is described as irreversible while transaction backups must be
+retained until explicit prune. Current code preserves encrypted recovery and
+still requires the permanent-delete acknowledgement; no destructive retention
+change or spec rewrite was made while that decision is pending. Neither issue
+prevents independent implementation and acceptance work.
