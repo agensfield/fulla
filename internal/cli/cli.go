@@ -56,7 +56,10 @@ func (a *App) Main(args []string) (status int) {
 		}
 	}
 	defer func() {
-		if recover() != nil {
+		if value := recover(); value != nil {
+			if debugPanics {
+				panic(value)
+			}
 			status = a.failure(p.Command, jsonMode, fault.New("internal.failure", "unexpected internal failure"))
 		}
 	}()

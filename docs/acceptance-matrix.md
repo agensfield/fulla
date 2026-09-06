@@ -63,7 +63,7 @@ security review before stable release.
 | I12 | Fresh one-use session-bound pinned challenges | Strict challenge, expiry, same-session/fresh-session replay tests for both protocols. | Final adversarial protocol review; do not infer every transport failure from replay tests. |
 | I13 | Verify new identity before rotation; sealed historical continuity | Rotation staging/continuity/destruction and killed-boundary fixtures. | Complete retired/private copy lifecycle and pre-journal cleanup audit (J6). |
 | I14 | Independent full-archive protection; empty-target restore | Archive circular-protection, corrupted archive, target-race, and confirmation tests. | Composite full-state restore and all publication interruptions (J7). |
-| I15 | Redacted release panic output, no secret crash artifact | App/main recovery boundaries and plugin panic redaction; explicit diagnostics. | Deliberate release-binary panic acceptance and development/test stack policy reconciliation. |
+| I15 | Redacted release panic output, no secret crash artifact | CLI recovery boundary, plugin panic redaction, explicit diagnostics; [crash policy](crash-diagnostics.md) tests default redaction and explicit development stacks in human/JSON subprocesses. | Deliberate final-release-binary panic acceptance and goroutine/runtime containment audit remain open. Development stacks now require the compile-time `fulla_debug` tag. |
 | I16 | No same-Unix-user isolation claim | README trust boundary and canonical spec; explicitly trusted editor/plugin/process model. | Preserve wording through final help/docs/release review; no isolation feature is implied. |
 
 ## Canonical command-tree accounting

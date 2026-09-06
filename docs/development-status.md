@@ -1489,3 +1489,26 @@ release gates or prove hosted OIDC/signing/draft/download behavior. No version
 was changed, tag created, or release published. Actual tag execution, attestation
 verification and installed-release/tap acceptance remain open. Prior b89142f
 completed hosted CI: https://github.com/agensfield/fulla/actions/runs/33999152217.
+
+### Explicit development panic diagnostics (2026-09-06)
+
+The CLI previously redacted recovered panics in every build, leaving the spec's
+opt-in development/test stack behavior unimplemented. The default build keeps
+its fixed `internal.failure` result. The explicit `fulla_debug` build tag now
+re-panics with the original value and stack; no runtime environment switch can
+enable this in an ordinary installed binary. See [crash diagnostics](crash-diagnostics.md).
+
+Four isolated string/error × human/JSON subprocess cases run for each build
+policy. The default requires status 1, exact redacted output, no private value,
+stack, path, or generated crash artifact. Debug requires the original synthetic
+value and CLI stack. Two negative-control overlays inverted the respective
+production constants; both were rejected by the independent policy tests.
+
+The first debug fixture incorrectly required empty stdout: Go's testing runner
+writes its own failure banner when the deliberate panic escapes. Inspection
+confirmed the CLI stack on stderr; the debug assertion was corrected, while the
+default output checks stayed strict. Full CLI race tests (15.3s), debug-policy
+race tests, CLI vet, actionlint, and diff checks passed locally with Go 1.26.0.
+Linux/macOS CI now tests both policies. Final artifact fault injection and
+independent goroutine/runtime containment remain open; this is not universal
+panic containment. Prior source `7f12148` passed Linux/macOS CI 33999820490.
