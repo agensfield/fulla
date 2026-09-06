@@ -318,7 +318,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 		return result, err
 	}
 	s.Close()
-	if err := syncRestoreDirectories(staged, securefs.SyncDir); err != nil {
+	if err := syncStagedDirectories(staged, securefs.SyncDir); err != nil {
 		return result, err
 	}
 	if err := checkpoint("validated"); err != nil {
@@ -357,7 +357,7 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 
 // Files are synced when written. Persist every directory entry bottom-up too,
 // including empty directories and ancestors created by MkdirAll.
-func syncRestoreDirectories(root *os.Root, syncDir func(*os.Root, string) error) error {
+func syncStagedDirectories(root *os.Root, syncDir func(*os.Root, string) error) error {
 	var directories []string
 	if err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {

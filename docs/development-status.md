@@ -1952,3 +1952,21 @@ Initial lock-directory denial variants blocked owner publication itself rather
 than the intended post-takeover cleanup phase, and were removed from this scoped
 fixture. They are not counted as post-publication retry proof. Production code
 is unchanged; the new test verifies the actual persisted binding/retry contract.
+
+### Initialization/adoption pre-publication synchronization (2026-09-06)
+
+Initialization previously synchronized its staging root before rename but did
+not explicitly synchronize every Git-created file. Fulla's own writes already
+sync files and their containing directories, which does not cover Git's writes.
+Initialization now synchronizes every staged regular file, then all directories
+bottom-up, before publication. Adoption uses the same pass over its metadata
+stage. The existing restore directory-order helper is shared under a general
+name; restore's behavior is unchanged.
+
+Git/no-Git tests observe the complete file/directory inventory (including Git
+files and empty nested directories), verify all file syncs precede directory
+syncs and children precede parents, and preserve bytes/modes. Injected file or
+directory failures stop at the first error. A negative overlay omitting file
+synchronization fails the inventory/order assertions. Targeted initialization,
+adoption and restore race tests pass (15.387s), as does vet. This is explicit
+syscall ordering and error handling, not physical power-loss or disk-cache proof.

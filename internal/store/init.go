@@ -158,7 +158,7 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 	if err := s.DeepVerify(); err != nil {
 		return result, err
 	}
-	if err := securefs.SyncDir(staged, "."); err != nil {
+	if err := syncInitializationAt(staged, "."); err != nil {
 		return result, err
 	}
 	if hook != nil {
@@ -310,6 +310,9 @@ func adopt(directory string, dryRun bool, ui *crypt.UI, hook func(string) error)
 		}
 	}
 	if err := writeMetadataContents(s.Root, stage, meta, "init"); err != nil {
+		return result, err
+	}
+	if err := syncInitializationAt(s.Root, stage); err != nil {
 		return result, err
 	}
 	if hook != nil {

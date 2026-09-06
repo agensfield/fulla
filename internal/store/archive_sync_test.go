@@ -25,7 +25,7 @@ func TestRestoreSyncsAllDirectoriesBeforeTheirParents(t *testing.T) {
 		t.Fatal(err)
 	}
 	seen := map[string]int{}
-	err = syncRestoreDirectories(root, func(root *os.Root, name string) error {
+	err = syncStagedDirectories(root, func(root *os.Root, name string) error {
 		if _, ok := seen[name]; ok {
 			t.Fatalf("duplicate sync %s", name)
 		}
@@ -48,7 +48,7 @@ func TestRestoreSyncsAllDirectoriesBeforeTheirParents(t *testing.T) {
 	}
 	injected := errors.New("fixture sync failure")
 	calls := 0
-	err = syncRestoreDirectories(root, func(*os.Root, string) error { calls++; return injected })
+	err = syncStagedDirectories(root, func(*os.Root, string) error { calls++; return injected })
 	if !errors.Is(err, injected) || calls != 1 {
 		t.Fatalf("sync error lost: %v (%d calls)", err, calls)
 	}
