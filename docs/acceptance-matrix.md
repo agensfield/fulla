@@ -38,7 +38,7 @@ No row below replaces the wording or scope of the locked specification.
 | F8 | Interrupted domain migrations | No complete migration engine/fixture series was identified. Adopted pa stores and same-format recovery are not domain migration proof. | Open: old state, staging, publication, retry, rollback boundary. |
 | F9 | Disjoint/equal/different inventories and one-sided commit | Remote session and partial-retry fixtures, plus J2 OpenSSH integration. | Bounded protocol evidence; physical-host failure remains J4. |
 | F10 | Current/current, current/previous, obsolete refusal | Remote tests run protocols 2/1 and reject an older generation. | Bounded protocol evidence; distinct released-binary rolling upgrade remains a stable-release gate. |
-| F11 | Mismatch/unpaired/replay/filesystem/dirty Git attacks | Remote auth/domain tests; securefs/ACL tests; [Git conversion](../internal/store/git_conversions_test.go), store permissions/history tests. | Partial: individual adversarial cases exist; whole-surface trust/decryption-order audit remains open. |
+| F11 | Mismatch/unpaired/replay/filesystem/dirty Git attacks | Remote auth/domain tests; securefs/ACL tests; [Git conversion](../internal/store/git_conversions_test.go), [internal Git routing](git-routing.md), store permissions/history tests. | Partial: individual adversarial cases exist; whole-surface trust/decryption-order audit remains open. |
 | F12 | Bundles/history/backups/retired identities/full archives | Transfer, archive, backup, rotation and stream tests. | Bounded component evidence; combined restore/state-completeness gap is J7. |
 
 ## Sixteen security invariants

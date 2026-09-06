@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -25,7 +26,19 @@ func TestInternalGitDoesNotLaunchAutomaticMaintenance(t *testing.T) {
 		t.Fatal("positive control did not observe automatic maintenance")
 	}
 	traced := filepath.Join(directory, "fulla.json")
-	t.Setenv("GIT_TRACE2_EVENT", traced)
+	// Internal Git strips ambient tracing because it can write outside the
+	// selected store. Instrument the explicitly trusted fixture executable
+	// after that boundary instead; never permit tracing in production for tests.
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
+	wrapper := "#!/bin/sh\nexport GIT_TRACE2_EVENT=" + quote(traced) + "\nexec " + quote(realGit) + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(directory, "git"), []byte(wrapper), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// Include initialization and transactional writes: maintenance must not
 	// outlive either command and race filesystem inspection or snapshots.
 	actual := fixture(t, true)

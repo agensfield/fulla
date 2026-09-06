@@ -1748,3 +1748,25 @@ race and CLI vet. An ignored-selector source overlay fails both variants, provin
 the acceptance detects whole-store scope bypass. See scoped-recovery.md for the
 exact proof and limits. This does not produce an offline copy of live Agensfield
 credentials or authorize changes to its automation credentials.
+
+### Internal Git routing isolation (2026-09-06)
+
+Root cause: `git -C passwords` still honored ambient repository/index/object/
+common-directory routing and trace destinations, while `core.worktree` could
+redirect the working tree. Previous-helper negative controls demonstrate actual
+unrelated-fixture mutation for object/common/trace routes, configured worktree
+failure, and acceptance of external storage files. All touched repositories in
+these experiments are generated fixtures.
+
+Internal commands now fix absolute git-dir/work-tree paths, retain only the three
+standard config-file selection variables from GIT_*, and force optional locks
+off. Textual commondir and object alternates files are rejected before invoking
+Git. Explicit expert `fulla git` remains separate. See git-routing.md for scope.
+
+The routing regression and maintenance tests pass under race detection. Initially
+the old maintenance test failed because its ambient GIT_TRACE2_EVENT was filtered;
+its trace instrumentation now lives in the trusted fixture executable instead.
+The prior-helper overlay fails the new regression suite, including observed
+external mutations. The first broad run had only the expected old maintenance-fixture failure;
+a clean rerun of `go test -race ./...` passed (store package 220.354s), and
+`go vet ./...` passed. All tests use Go 1.26.0.
