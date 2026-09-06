@@ -2022,3 +2022,27 @@ history restore above the metadata cap. Targeted race tests passed (6.037s), as
 did vet. A negative overlay removing cancellation hits the bounded subprocess
 watchdog and cleans its private process group. Expert fulla git remains native;
 large metadata is an explicit refusal, never silent truncation.
+
+
+## 2026-09-06: Physical-host partial sync and retry
+
+Added an explicit opt-in cross-host acceptance test using production OpenSSH,
+remote CLI serving, and the local production sync client. The established devbox
+route was revalidated as arda/Linux/x86_64. A development binary from production
+source 26da4ab was uploaded only to a new Fulla fixture directory; SHA-256 matched
+on both hosts. No production implementation changed.
+
+All four macOS/arm64 to devbox cases passed: Git/no-Git stores and lost imported/
+exported replies (97.59s; race package 98.886s). The remote commit is verified
+before retry, the local pull is absent, status 3 and durable partial receipts
+retain accurate uncertainty, and retry converges without rewriting committed
+ciphertext. Both divergent shared values, empty/binary entries and deep health
+are verified. Ordinary remote race tests passed (37.731s), followed by full vet.
+
+Pins are seeded fixture data, so this is not CLI enrollment acceptance. Dropping
+a server reply is a deterministic transport interruption, not physical power
+loss or a released rolling upgrade. The lane uses current protocol; prior-
+protocol interruption fixtures remain separate. See crosshost-acceptance.md for
+reproduction, artifact hash, cleanup scope and evidence limits. Migration policy,
+other recovery gates and release publication remain open. Predecessor 26da4ab CI
+34008754988 passed on Linux/macOS.
