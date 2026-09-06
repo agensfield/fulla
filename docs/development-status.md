@@ -1770,3 +1770,19 @@ The prior-helper overlay fails the new regression suite, including observed
 external mutations. The first broad run had only the expected old maintenance-fixture failure;
 a clean rerun of `go test -race ./...` passed (store package 220.354s), and
 `go vet ./...` passed. All tests use Go 1.26.0.
+
+### Write preflight before selected input (2026-09-06)
+
+The CLI previously read explicit stdin/descriptor data before the store rejected
+a duplicate add or missing edit. The new early existence check prevents that
+unnecessary consumption and also precedes interactive input; the store's locked
+check remains authoritative against races. The regression verifies both refusal
+cases in Git/no-Git and JSON/noninteractive modes, typed JSON errors, no stdin
+read and unchanged files/modes. A prior-dispatcher overlay reproduces input
+consumption on duplicate add. CLI race tests and vet pass.
+
+Initial test setup failures were fixture errors: macOS's /var symlink and an
+unset HOME. The fixture now canonicalizes its temporary directory and supplies
+an isolated HOME, as existing CLI fixtures do. No product path/config checks
+were weakened. This change does not promise that a raced refusal after the
+preflight can never consume input.

@@ -408,6 +408,18 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if len(p.Args) != 1 {
 			return nil, false, fault.Usage(p.Command + " requires one entry name")
 		}
+		// Refuse an impossible write before consuming an explicit secret stream
+		// or opening an editor. The store repeats this check under its write lock.
+		exists, err := s.Exists(p.Args[0])
+		if err != nil {
+			return nil, false, err
+		}
+		if exists && p.Command == "add" {
+			return nil, false, fault.New("entry.exists", "entry already exists; use edit")
+		}
+		if !exists && p.Command == "edit" {
+			return nil, false, fault.New("entry.not_found", "entry does not exist; use add")
+		}
 		if !p.has("stdin") && !p.has("from-fd") && !p.has("generate") {
 			if p.has("json") || p.has("non-interactive") {
 				return nil, false, fault.Interaction("provide --stdin, --from-fd N, or --generate")

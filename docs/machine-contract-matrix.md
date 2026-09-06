@@ -83,3 +83,18 @@ success combinations, controlling-terminal absence/availability for every intera
 workflow, and all signal/FD/process combinations remain part of J3/J1 in the
 full-spec acceptance matrix. No row equates a missing-operand refusal with an
 implemented successful workflow.
+
+## Write eligibility before input
+
+`add` and `edit` now inspect the selected entry before consuming an explicit
+secret stream or opening interactive input. An already-existing add returns
+`entry.exists`; editing a missing entry returns `entry.not_found`. The store
+still repeats eligibility checks under its write lock, so this early observation
+does not authorize a raced replacement. A writer that changes state after the
+preflight can still cause a later refusal after input has been read.
+
+`TestImpossibleWriteDoesNotConsumeSelectedInput` covers both refusals on Git and
+no-Git stores in JSON and noninteractive human modes. It checks zero stdin reads,
+the JSON error code and unchanged store files/modes. A previous-dispatcher source
+overlay consumes stdin on the duplicate-add case and fails the regression.
+This is specific input-order evidence, not complete per-channel parity proof.
