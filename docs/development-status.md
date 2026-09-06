@@ -1786,3 +1786,18 @@ unset HOME. The fixture now canonicalizes its temporary directory and supplies
 an isolated HOME, as existing CLI fixtures do. No product path/config checks
 were weakened. This change does not promise that a raced refusal after the
 preflight can never consume input.
+
+### Complete command discovery help (2026-09-06)
+
+Default help now lists all canonical daily, trust/sync, recovery, inspection and
+integration commands instead of the early subset and stale unimplemented-domain
+message. It includes explicit input examples, independent recovery material,
+empty-target full restoration, routine versus fingerprint/destruction authority,
+retained backups and development-release qualification. The text lives in
+internal/cli/help.go so command dispatch remains below 500 lines.
+
+Native no-argument and JSON-help checks passed with an intentionally invalid
+selected config: both avoid config/store access and leave the fixture directory
+unchanged. JSON help retains the fulla.cli/v1 envelope and identical help text.
+Build and CLI vet pass. This is help/discovery work, not acceptance of every
+listed workflow or completion of preview qualification.

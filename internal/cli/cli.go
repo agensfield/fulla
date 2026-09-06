@@ -453,25 +453,3 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 	}
 	return nil, false, fault.Usage("unknown command")
 }
-
-const help = `Fulla: a local-first secret custodian (development build)
-
-  fulla init                        Confirm a private store with Git history
-  fulla init --adopt --dry-run      Verify a compatible pa store without changes
-  fulla add NAME                    Choose generation, hidden input, or editor
-  fulla add NAME --stdin            Add exact bytes from standard input
-  fulla show NAME                   Write exact decrypted bytes
-  fulla copy NAME                   Copy text with conditional 45-second expiry
-  fulla edit NAME                   Edit with the trusted configured editor
-  fulla edit NAME --stdin           Replace an existing entry
-  fulla list                       List entry names
-  fulla move OLD NEW                Move without overwriting
-  fulla remove NAME                 Remove an entry
-  fulla doctor --report PATH        Write a private redacted diagnostic report
-  fulla doctor --fix-permissions    Explicitly repair safe private mode issues
-
-Recovery protection: --recipient RECIPIENT, --passphrase (hidden terminal input),
-  or --passphrase-fd N. --passphrase accepts no value; export confirms it twice.
-
-Global: --store PATH, --config PATH, --json, --non-interactive, --help, --version
-The remaining locked command domains are under implementation.`
