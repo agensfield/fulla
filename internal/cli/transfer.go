@@ -87,6 +87,9 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 				return nil, fault.Usage("manifest must be a nonempty JSON array of exact entry names")
 			}
 		}
+		if err := s.CheckExportSelection(names); err != nil {
+			return nil, err
+		}
 		recipients, err := exportRecipients(p)
 		if err != nil {
 			return nil, err

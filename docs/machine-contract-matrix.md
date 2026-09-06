@@ -151,6 +151,9 @@ noninteractive human modes where stdout protocol ownership permits them. A real
 selected descriptor must remain open at offset zero. The entire fixture tree,
 including output/manifest/passphrase files and modes, must remain unchanged.
 The old dispatcher/transfer implementation fails this test because it consumes
-and closes the descriptor before refusing. This checks impossible publication
-and malformed selection; valid JSON with nonexistent/duplicate entry selectors
-is still validated by the store after recovery protection is selected.
+and closes the descriptor before refusing. The same fixture now covers valid JSON naming missing, duplicate and traversal
+selectors. `CheckExportSelection` is shared by CLI preflight and `ExportLogical`,
+which repeats it under the shared lock before decryption. Invalid selectors
+therefore leave the descriptor untouched too. A successful preflight is advisory:
+a cooperating writer may change the inventory before the locked recheck, which
+can still refuse after recovery input was supplied.

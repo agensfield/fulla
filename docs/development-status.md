@@ -2065,3 +2065,21 @@ passed. Rebuilt native agent Git/no-Git journeys and the full controlling-termin
 harness passed, including passphrase recovery, confirmations and plugin flows.
 Predecessor c2cc92c CI 34009214090 passed on Linux/macOS. The broader metadata
 migration and release gaps remain explicit.
+
+
+## 2026-09-06: Validate logical selectors before recovery input
+
+Completed the remaining export selector preflight: missing, duplicate and invalid
+entry paths in an otherwise valid JSON manifest now fail before consuming the
+recovery passphrase. Extracted the existing selection checks into
+Store.CheckExportSelection and reused them in the CLI and locked export path.
+No parallel selector implementation or authorization cache was introduced.
+
+The expanded real-descriptor Git/no-Git JSON/noninteractive tests passed (2.885s).
+A previous-CLI-source overlay detects the missing preflight by observing a
+consumed/closed descriptor. Transfer/scoped store tests passed (2.986s), CLI
+selection tests passed (3.036s), and full-project vet passed. Full CLI/remote race
+acceptance also passed (53.258s / 59.425s), including scoped infrastructure
+recovery and current/previous protocol transfers. The store still rechecks
+under the shared lock; a valid preflight cannot prevent a subsequent raced
+inventory change. Metadata migration and release work remain open.

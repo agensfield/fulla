@@ -30,6 +30,26 @@ type TransferResult struct {
 	Mutation *MutationResult `json:"mutation,omitempty"`
 }
 
+// CheckExportSelection checks names without decrypting entries or changing state.
+// A preflight result is advisory: ExportLogical repeats it under the store lock.
+func (s *Store) CheckExportSelection(names []string) error {
+	seen := map[string]bool{}
+	for _, name := range names {
+		if seen[name] {
+			return fault.Usage("duplicate selected entry")
+		}
+		seen[name] = true
+		exists, err := s.Exists(name)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fault.New("entry.not_found", "selected entry does not exist")
+		}
+	}
+	return nil
+}
+
 // ExportLogical uses PAXFER1 framing inside age. The selector is validated in
 // full before the first entry is decrypted or any destination is created.
 func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output string, stdout io.Writer) (result TransferResult, err error) {
@@ -57,19 +77,8 @@ func (s *Store) ExportLogical(names []string, recipients []age.Recipient, output
 			return result, err
 		}
 	}
-	seen := map[string]bool{}
-	for _, name := range names {
-		if seen[name] {
-			return result, fault.Usage("duplicate selected entry")
-		}
-		seen[name] = true
-		exists, err := s.Exists(name)
-		if err != nil {
-			return result, err
-		}
-		if !exists {
-			return result, fault.New("entry.not_found", "selected entry does not exist")
-		}
+	if err := s.CheckExportSelection(names); err != nil {
+		return result, err
 	}
 	names = append([]string{}, names...)
 	sort.Strings(names)

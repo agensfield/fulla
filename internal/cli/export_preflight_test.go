@@ -24,6 +24,22 @@ func TestImpossibleExportDoesNotConsumePassphrase(t *testing.T) {
 			if _, err := store.Init(dir, noGit, false); err != nil {
 				t.Fatal(err)
 			}
+			s, err := store.Open(dir, true, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Write("existing", []byte("fixture"), false); err != nil {
+				s.Close()
+				t.Fatal(err)
+			}
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			for name, data := range map[string]string{"duplicate": `["existing","existing"]`, "missing": `["existing","absent"]`, "traversal": `["../outside"]`} {
+				if err := os.WriteFile(filepath.Join(home, name), []byte(data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			occupied := filepath.Join(home, "occupied")
 			manifest := filepath.Join(home, "manifest")
 			passphrase := filepath.Join(home, "passphrase")
@@ -42,6 +58,9 @@ func TestImpossibleExportDoesNotConsumePassphrase(t *testing.T) {
 				{"logical-occupied", []string{"transfer", "export", "--output", occupied}, 1, "export.exists"},
 				{"full-occupied", []string{"backup", "export", "--full", "--output", occupied}, 1, "export.exists"},
 				{"malformed-manifest", []string{"transfer", "export", "--output", filepath.Join(home, "new"), "--manifest", manifest}, 2, "invocation.invalid"},
+				{"duplicate-selector", []string{"transfer", "export", "--output", filepath.Join(home, "new"), "--manifest", filepath.Join(home, "duplicate")}, 2, "invocation.invalid"},
+				{"missing-selector", []string{"transfer", "export", "--output", filepath.Join(home, "new"), "--manifest", filepath.Join(home, "missing")}, 1, "entry.not_found"},
+				{"traversal-selector", []string{"transfer", "export", "--output", filepath.Join(home, "new"), "--manifest", filepath.Join(home, "traversal")}, 2, "invocation.invalid"},
 				{"stdout-manifest", []string{"transfer", "export", "--output", "-", "--manifest", manifest}, 2, "invocation.invalid"},
 			} {
 				for _, mode := range []string{"--json", "--non-interactive"} {
