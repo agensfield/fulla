@@ -2383,3 +2383,25 @@ refusal test passed its targeted race gate and store/securefs vet also passed.
 Older incomplete unbound locks, storage power loss, the remaining operation-specific acceptance
 matrix and the pending product wording decisions remain open. No tag or live
 credential cutover was performed.
+
+
+### Recovery input ordering (2026-09-06)
+
+The machine-command audit found import, isolated verify and full restore selecting
+recovery identities/passphrases before reading their encrypted artifact. Full
+restore also selected input before refusing an occupied target or absent parent.
+A new 24-case Git/no-Git and JSON/noninteractive regression failed every case on
+the old dispatcher: the selected descriptor had been consumed and closed.
+
+Source-selection validation is now separate from input consumption. Missing
+independent authority, conflicting sources and machine-mode terminal requests
+retain their original refusal before artifact reads. Readable artifact checks
+and a shared restore-target preflight then precede recovery input. Store restore
+rechecks its existing target conditions and retains final no-replace publication.
+No additional deletion or overwrite authority is introduced. See the machine
+contract matrix for the exact covered channels and authentication boundary.
+
+Targeted recovery/restore race passed CLI 1.901s and store 37.875s, including full
+restore confirmation, handled errors and killed-owner boundaries. Full CLI race
+passed (35.783s), followed by full vet. The full-spec acceptance matrix remains
+open; this checkpoint does not claim every channel or authority combination.

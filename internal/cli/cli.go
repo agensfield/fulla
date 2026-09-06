@@ -292,11 +292,17 @@ func (a *App) dispatch(p invocation) (any, bool, error) {
 		if !p.has("yes") && (p.has("json") || p.has("non-interactive")) {
 			return nil, false, fault.Interaction("full restore requires --yes and an empty target; it clones identity and peer authority")
 		}
-		ids, e := transferIdentities(p, nil)
+		if err := checkRecoverySource(p, false); err != nil {
+			return nil, false, err
+		}
+		if err := store.CheckRestoreTarget(c.StorePath); err != nil {
+			return nil, false, err
+		}
+		data, e := store.ReadArtifact(p.Args[0], store.MaxBundleBytes)
 		if e != nil {
 			return nil, false, e
 		}
-		data, e := store.ReadArtifact(p.Args[0], store.MaxBundleBytes)
+		ids, e := transferIdentities(p, nil)
 		if e != nil {
 			return nil, false, e
 		}

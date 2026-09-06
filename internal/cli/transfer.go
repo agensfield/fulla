@@ -36,9 +36,26 @@ func passphraseFD(value string) (string, error) {
 	return string(b), nil
 }
 
-func transferIdentities(p invocation, s *store.Store) ([]age.Identity, error) {
+// Validate source selection without reading an identity, descriptor or terminal.
+func checkRecoverySource(p invocation, local bool) error {
 	if p.has("identity") && (p.has("passphrase-fd") || p.has("passphrase")) {
-		return nil, fault.Usage("select one recovery identity or passphrase source")
+		return fault.Usage("select one recovery identity or passphrase source")
+	}
+	if p.has("passphrase") && p.has("passphrase-fd") {
+		return fault.Usage("select one passphrase input source")
+	}
+	if p.has("passphrase") && (p.has("json") || p.has("non-interactive")) {
+		return fault.Interaction("terminal passphrase input is unavailable in machine mode; use --passphrase-fd")
+	}
+	if !local && !p.has("identity") && !p.has("passphrase") && !p.has("passphrase-fd") {
+		return fault.Interaction("isolated verification requires --identity PATH or --passphrase / --passphrase-fd N")
+	}
+	return nil
+}
+
+func transferIdentities(p invocation, s *store.Store) ([]age.Identity, error) {
+	if err := checkRecoverySource(p, s != nil); err != nil {
+		return nil, err
 	}
 	if p.has("passphrase-fd") || p.has("passphrase") {
 		value, err := recoveryPassphrase(p, false)
@@ -104,11 +121,14 @@ func (a *App) transfer(p invocation, s *store.Store) (any, error) {
 			return nil, err
 		}
 	}
-	ids, err := transferIdentities(p, s)
-	if err != nil {
+	if err := checkRecoverySource(p, s != nil); err != nil {
 		return nil, err
 	}
 	ciphertext, err := store.ReadArtifact(p.Args[0], store.MaxBundleBytes)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := transferIdentities(p, s)
 	if err != nil {
 		return nil, err
 	}

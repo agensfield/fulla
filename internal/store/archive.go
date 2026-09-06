@@ -178,30 +178,11 @@ func restoreFullConfirmed(ciphertext []byte, identities []age.Identity, target s
 	result.Path = target
 	result.IdentityCloned = true
 	result.Warning = "This restore clones the original identity and peer authority. Use it to replace a lost machine, not to onboard a live peer."
-	target, err = securefs.Canonical(target, true)
+	target, emptyExisting, err := checkRestoreTarget(target)
 	if err != nil {
-		return result, fault.New("recovery.unsafe_target", err.Error())
-	}
-	emptyExisting := false
-	if info, err := os.Lstat(target); err == nil {
-		if !info.IsDir() {
-			return result, fault.New("recovery.target_exists", "restore target must be empty")
-		}
-		if err := securefs.ValidateInfo(target, info, true); err != nil {
-			return result, err
-		}
-		entries, err := os.ReadDir(target)
-		if err != nil || len(entries) != 0 {
-			return result, fault.New("recovery.target_exists", "restore target must be empty")
-		}
-		emptyExisting = true
-	} else if !os.IsNotExist(err) {
 		return result, err
 	}
-	parent, err := securefs.Canonical(filepath.Dir(target), false)
-	if err != nil {
-		return result, fault.New("recovery.invalid_target", "restore parent must already exist")
-	}
+	parent := filepath.Dir(target)
 	r, err := crypt.DecryptStream(bytes.NewReader(ciphertext), identities)
 	if err != nil {
 		return result, streamFailure(err, "recovery.decrypt_failed", "could not decrypt full archive")

@@ -185,3 +185,27 @@ Original design consultation confirms the interview consciously selected direct
 target execution and signals after exec, without discussing inherited/pending
 state. The broader wording is being clarified with Arda; neither a waiver nor
 a native-startup redesign is assumed. See run-signal-inheritance.md.
+
+## Recovery eligibility before input
+
+Logical import and isolated verification now read the bounded encrypted artifact
+before selecting recovery identities or consuming a passphrase descriptor. Full
+restore additionally checks target emptiness/safety and the existing parent before
+recovery input. Source-selection validation remains first, so absent authority,
+conflicting sources and machine-mode terminal requests retain their explicit
+refusals. No passphrase or private identity is needed for these checks.
+
+The target checker is shared with the store restore path. Restore repeats it
+before decryption and retains its final empty-target/no-replace publication
+checks. An early observation does not authorize overwriting a raced destination.
+Unreadable artifacts refuse before recovery input; an artifact that can be read
+but fails cryptographic authentication still requires the selected identity.
+
+TestImpossibleRecoveryPreservesSelectedPassphrase covers missing import/verify/
+full-restore artifacts, occupied directory/file targets and a missing restore
+parent in JSON and noninteractive human modes on Git/no-Git fixtures: 24 cases.
+Each requires the real selected descriptor to remain open at offset zero, a typed
+failure, no implicit stdin read or secret diagnostics, and unchanged fixture
+paths/modes/bytes. All cases failed against the previous dispatcher because it
+consumed and closed the descriptor. Existing successful recovery and confirmation
+journeys remain separate positive controls.
