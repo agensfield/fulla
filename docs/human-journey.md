@@ -22,8 +22,7 @@ select opaque history/snapshot IDs, so those selections do not depend on the
 presentation format of human metadata output.
 
 Clipboard tools are fixture executables, never the host's actual clipboard.
-Separate CI checks still cover real macOS/X11 backends; real Wayland remains
-unverified. The shared PTY driver keeps the existing prompt deadlines, terminal
+Separate CI checks cover real macOS/X11 backends and headless Sway/Wayland. The shared PTY driver keeps the existing prompt deadlines, terminal
 mode restoration checks, and owned-child cleanup. The original interactive
 harness continues to cover cancellation, plugin and encrypted-SSH interaction,
 adoption, and additional recovery refusal cases.
@@ -49,8 +48,8 @@ not a command-specific table or interactive browser. Warnings remain on stderr.
 `--json` retains its versioned envelope and raw `show` retains exact bytes.
 The journey checks human headings as well as the behavior described above.
 
-This is bounded J1 journey evidence. Native Wayland, broader shell installation
-and full-spec release qualification remain separate.
+This is bounded J1 journey evidence. Broader shell installation and full-spec
+release qualification remain separate.
 The no-Git test proves current retained-backup behavior; it does not settle the
 spec's conflicting “irreversible” deletion and retained transactional-backup
 wording. That decision remains pending, and retention has not been weakened.
@@ -63,8 +62,11 @@ minimal config. No existing desktop socket is inherited. The wrapper refuses
 non-Linux/non-GitHub execution and bounds startup, acceptance and shutdown.
 It runs the shared clipboard harness with real `wl-copy`/`wl-paste`, checking the
 selected Fulla backend, UTF-8/trailing-newline preservation, matching expiry,
-replacement preservation and binary-input refusal. Hosted execution is pending;
-this gate's presence alone is not a passing Wayland receipt.
+replacement preservation and binary-input refusal. Hosted Linux execution passed at `000687b` in
+[run 34003205577](https://github.com/agensfield/fulla/actions/runs/34003205577);
+its receipt explicitly selects the Wayland backend. Both platform jobs passed.
+The ambient-environment sentinel is checked only by fake utilities, not by the
+real desktop tools; the receipt now makes that scope explicit.
 
 The choice follows [wl-clipboard's data-control support](https://github.com/bugaevc/wl-clipboard/releases)
 and the [wlroots headless backend](https://github.com/swaywm/wlroots/blob/master/docs/env_vars.md).

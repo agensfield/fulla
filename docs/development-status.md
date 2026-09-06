@@ -1722,3 +1722,13 @@ separate from the host desktop. No runtime dependencies were added to Fulla;
 Sway/wl-clipboard are runner-only test dependencies. Local fixture acceptance,
 Ruff, basedpyright and actionlint pass. Actual Wayland execution awaits the
 hosted Linux job; retain the open matrix claim until that receipt exists.
+
+### Real Wayland receipt confirmed (2026-09-06)
+
+Hosted run 34003205577 at `000687b` passed Linux and macOS. Its real Wayland
+step emitted backend=wayland and passed exact text, matching expiry, replacement
+preservation and binary refusal. Human-output predecessor `5e5fed9` also passed
+both platforms in run 34003056161. The clipboard receipt now distinguishes the
+ambient-environment sentinel checked by fake utilities from real utilities,
+where that sentinel is not instrumented. No universal compositor or atomic
+compare-and-clear guarantee is inferred.

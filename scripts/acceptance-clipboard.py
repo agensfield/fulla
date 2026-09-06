@@ -150,7 +150,7 @@ print(
             "expiry": True,
             "replacement_preserved": True,
             "binary_rejected": True,
-            "ambient_environment_filtered": True,
+            "ambient_environment_filter_checked": not real,
         }
     )
 )
