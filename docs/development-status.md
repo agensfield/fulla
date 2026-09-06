@@ -2227,3 +2227,40 @@ journal and lock cleanup share the domain's meanings. Asked Arda whether preview
 requires a migration engine without a production transformation; no answer,
 waiver or format change is inferred. F7/F8 remain open. Docs were checked against
 source/history and with git diff --check; no runtime changes or test reruns.
+
+
+## 2026-09-06: Bind initialization staging before private key creation
+
+Initialization now creates and binds its existing shared lock inside the stage
+before generating keys. init_id is the intended store ID; init_target encodes the
+absolute destination safely across spaces. The stage parent is synced before key
+creation. The lock follows atomic publication and releases after parent sync.
+Existing doctor inspection/recover-lock supports bound partial stages: explicit
+unpublished cleanup never publishes, while published recovery verifies store ID
+and layout before finalizing. No new sidecar, command, or domain version.
+
+The first integration attempt inspected a staging handle after its deferred close,
+turning ordinary cancellation into cleanup failure. Handled cleanup now reopens
+through the retained parent. Contents-first cleanup preserves the lock if private
+file removal fails; a negative overlay skipping it loses lock/info and fails the
+regression. A CLI mismatched-target case initially created the recovery guard
+before refusal; read-only initialization validation now precedes guard creation
+and repeats under recovery ownership. These were understood and fixed, not
+suppressed.
+
+Git/no-Git SIGKILL cases cover bound-empty, keys-before-metadata, staged and
+published states, live/wrong-token refusal, explicit unpublished retry, exact
+published paths/modes/bytes, reused-stage preservation and healthy unlocked
+completion. Staged cases additionally run a recovery subprocess with real chmod
+denial after validation, verify retained replacement token/binding after exit,
+restore only the fixture mode, reject the old token and retry successfully.
+CLI fixtures prove partial-stage ownership inspection and recovery, and unchanged
+refusal of absent/conflicting/mismatched bindings.
+
+Full Go 1.26 race passed (store 345.301s, CLI 91.896s, remote 100.766s), then full
+vet. After reserving lock-record headroom for recovery owner fields, targeted
+store/CLI race passed (6.375s / 1.465s) and full vet passed; the additional CLI
+inspection assertion passed (1.587s). Predecessor 625118a CI 34012554978 passed
+Linux/macOS. See init-recovery.md for development rollback and remaining legacy
+unbound staging, full-restore staging, final lock-removal and power-loss limits.
+No live credentials or retention policy changed.

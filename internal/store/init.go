@@ -89,16 +89,35 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 		return result, err
 	}
 	defer r.Close()
-	stage := ".fulla-init-" + securefs.ID()
+	meta := newMetadata()
+	stage := ".fulla-init-" + meta.StoreID
 	if err := r.Mkdir(stage, 0o700); err != nil {
 		return result, err
 	}
 	ownedStage := true
+	var initLock *Lock
 	defer func() {
 		if !ownedStage {
 			return
 		}
-		cleanupErr := r.RemoveAll(stage)
+		var cleanupErr error
+		if initLock != nil {
+			root, openErr := r.OpenRoot(stage)
+			if openErr != nil {
+				cleanupErr = openErr
+			} else {
+				owner, inspectErr := (&Store{Root: root}).InspectLock()
+				if inspectErr != nil || owner == nil || owner.Token != initLock.Token {
+					cleanupErr = fault.New("store.lock_changed", "initialization staging ownership changed")
+				} else {
+					cleanupErr = removeInitializationContents(root)
+				}
+				root.Close()
+			}
+		}
+		if cleanupErr == nil {
+			cleanupErr = r.RemoveAll(stage)
+		}
 		if cleanupErr == nil {
 			cleanupErr = securefs.SyncDir(r, ".")
 		}
@@ -123,6 +142,22 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 		return result, err
 	}
 	defer staged.Close()
+	s := &Store{Dir: filepath.Join(parent, stage), Root: staged}
+	initLock, err = s.lock("init", func() error { return nil })
+	if err != nil {
+		return result, err
+	}
+	if err := s.bindInitialization(initLock, meta.StoreID, directory); err != nil {
+		return result, err
+	}
+	if err := securefs.SyncDir(r, "."); err != nil {
+		return result, err
+	}
+	if hook != nil {
+		if err := hook("bound"); err != nil {
+			return result, err
+		}
+	}
 	if err := staged.Mkdir("passwords", 0o700); err != nil {
 		return result, err
 	}
@@ -135,10 +170,14 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 			return result, err
 		}
 	}
-	if err := writeMetadata(staged, metadata, newMetadata(), "init"); err != nil {
+	if hook != nil {
+		if err := hook("keys"); err != nil {
+			return result, err
+		}
+	}
+	if err := writeMetadata(staged, metadata, meta, "init"); err != nil {
 		return result, err
 	}
-	s := &Store{Dir: filepath.Join(parent, stage), Root: staged}
 	if !noGit {
 		if _, err := s.Git("init", "--initial-branch=main"); err != nil {
 			return result, err
@@ -170,6 +209,7 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 		return result, fault.New("store.publish_failed", "could not publish initialization without replacement")
 	}
 	ownedStage = false
+	s.Dir = directory
 	if hook != nil {
 		if err := hook("published"); err != nil {
 			return result, fault.Applied("store initialized but finalization interrupted", "init")
@@ -177,6 +217,9 @@ func initialize(directory string, noGit, dryRun bool, hook func(string) error) (
 	}
 	if err := securefs.SyncDir(r, "."); err != nil {
 		return result, fault.Applied("store initialized but parent synchronization failed", "init")
+	}
+	if err := initLock.Release(); err != nil {
+		return result, fault.Applied("store initialized but lock release failed", "init")
 	}
 	result.Fingerprint = crypt.Fingerprint(public)
 	result.Receipt = metadata + "/receipts/init.json"

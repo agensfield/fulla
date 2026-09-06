@@ -15,7 +15,7 @@ snapshots, swap, editor-managed files or another process sharing the Unix accoun
 | `.fulla/transactions/ID/publish-PATH_HASH` | Current rotation publication copy: private identity, sealed key or entry ciphertext | Owned by the existing journal/stage binding; original after/ data remains for retry. Atomic cross-parent rename publishes the copy; final owned-stage cleanup removes leftovers. |
 | Store-root `.fulla-stage-*` | Older atomic replacement can hold a plaintext private identity before rename | No durable binding maps this file to its intended destination. Doctor reports the name; destructive rotation and recovery refuse while it remains. No automatic deletion. |
 | `.fulla/retired/.fulla-stage-*` | Older atomic publication can hold a sealed retired identity before rename | Same diagnostic/refusal policy. A filename does not establish authority to erase the file. |
-| Parent `.fulla-init-ID` | Newly generated private identity and staged initial store | Handled cleanup is owned and reported. SIGKILL can leave an unbound sibling; there is no automatic recovery/delete authority. |
+| Parent `.fulla-init-ID` | Newly generated private identity and staged initial store | [Current writers bind the shared lock before key creation](init-recovery.md); explicit dead-owner recovery removes unpublished owned staging or finalizes the published destination. Legacy unbound siblings remain inspection-only. |
 | Parent `.fulla-restore-ID` | Restored private identities, retired artifacts and complete or partial archived store | Verified before publication; handled cleanup is owned. SIGKILL can leave an unbound sibling. Retry uses the original archive and does not delete an older sibling. |
 | Store `.fulla-adopt-ID` | Fulla metadata; adoption preserves existing live pa identity | Current writers bind the intended store ID into the shared lock. Recovery distinguishes unpublished stage cleanup from published metadata. Legacy unbound staging remains separate. |
 | Transaction backups / Git history | Encrypted entry ciphertext, not a plaintext entry cache | Retention/prune and historical-key recovery are separate policies. Deleting a live entry does not itself erase every historical ciphertext copy. |
@@ -62,7 +62,8 @@ atomic guard remains for older interrupted writers and unowned reserved files.
 
 The new guard prevents false local destruction claims in these two additional
 key-bearing locations. It does not bind or automatically remove atomic files,
-initialization siblings or restore siblings. A future cleanup path must establish
+legacy initialization siblings or restore siblings. Current bound initialization
+recovery is described in init-recovery.md. A future cleanup path must establish
 operation/target ownership, dead-writer evidence, replacement-token handling and
 publication state before acquiring deletion authority. Prefix matching alone
 must never become that cleanup authority. Physical durability, external copies

@@ -76,6 +76,15 @@ func TestInitializationStageCleanup(t *testing.T) {
 					if _, err := os.Stat(filepath.Join(stage, "identities")); err != nil {
 						t.Fatal("fixture did not retain private identity", err)
 					}
+					retained, openErr := os.OpenRoot(stage)
+					if openErr != nil {
+						t.Fatal(openErr)
+					}
+					owner, inspectErr := (&Store{Root: retained}).InspectLock()
+					retained.Close()
+					if inspectErr != nil || owner == nil || owner.InitID == "" {
+						t.Fatal("cleanup lost initialization binding", inspectErr)
+					}
 				case "reused":
 					if failure.Status != 3 || failure.Details["applied"] != true {
 						t.Fatal("lost applied state", failure)

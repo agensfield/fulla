@@ -194,3 +194,13 @@ real predecessor domain version from the actual future-transaction CRUD gap.
 It maps shared journal/staging/lock ownership and explains why removing a guard
 or relocating snapshots alone is unsafe. Transformation-fixture applicability
 has been returned to Arda as a product-scope question; no gate is waived.
+
+
+## Initialization recovery binding
+
+Current initialization binds init_id and the encoded intended destination into
+its shared lock before creating keys, retaining the lock through publication.
+[Initialization recovery](init-recovery.md) documents explicit partial-stage
+cleanup, published-store finalization, killed-owner and failed-cleanup retry
+fixtures, and the development-reader rollback boundary. Domain versions do not
+change; legacy unbound staging is not granted deletion authority.
