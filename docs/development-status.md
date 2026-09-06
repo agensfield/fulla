@@ -1986,3 +1986,13 @@ cache, shell configuration, tap, release or real store was changed. This closes
 a development-commit installation evidence gap while tagged release, Linux
 installation and Homebrew acceptance remain open. Public-network lookup is an
 explicit acceptance command, not a new mandatory CI dependency for every commit.
+
+### Hosted public Go installation gate (2026-09-06)
+
+Added an explicit workflow_dispatch Linux/macOS matrix for the public installation
+harness, with reviewed commit/version inputs, read-only repository permissions,
+pinned actions, fresh installation caches and 14-day JSON receipt artifacts.
+Inputs reach the shell only through quoted environment variables. The harness
+now records native GOOS/GOARCH as well as Go version. Actionlint, Ruff and
+basedpyright pass. Actual dispatched run evidence follows separately; this does
+not make public-network lookup mandatory on every CI push or publish a release.

@@ -105,6 +105,7 @@ with tempfile.TemporaryDirectory(prefix="fulla-go-install-") as temporary:
     _ = success(["doctor", "--deep"])
     with binary.open("rb") as executable:
         binary_hash = hashlib.file_digest(executable, "sha256").hexdigest()
+    toolchain = object_json(run([go, "env", "-json", "GOVERSION", "GOOS", "GOARCH"]))
     print(
         json.dumps(
             {
@@ -113,7 +114,9 @@ with tempfile.TemporaryDirectory(prefix="fulla-go-install-") as temporary:
                 "module_version": module_version,
                 "module_sum": matches[0][3],
                 "cli_version": version,
-                "go_version": run([go, "env", "GOVERSION"]).decode().strip(),
+                "go_version": toolchain["GOVERSION"],
+                "goos": toolchain["GOOS"],
+                "goarch": toolchain["GOARCH"],
                 "binary_sha256": binary_hash,
                 "fresh_module_and_build_caches": True,
                 "no_git_init_add_raw_json_deep_doctor": True,

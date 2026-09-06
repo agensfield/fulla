@@ -1,0 +1,52 @@
+name: Public Go installation acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Reviewed full Git commit ID to install from the public module
+        required: true
+        type: string
+      version:
+        description: Expected CLI version at the reviewed commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    if: github.repository == 'agensfield/fulla'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install public commit and verify native executable
+        shell: bash
+        env:
+          FULLA_INSTALL_COMMIT: ${{ inputs.commit }}
+          FULLA_INSTALL_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p dist
+          python3 scripts/acceptance-go-install.py \
+            "$FULLA_INSTALL_COMMIT" "$FULLA_INSTALL_VERSION" \
+            "$(go env GOROOT)/bin/go" > dist/go-install-receipt.json
+          cat dist/go-install-receipt.json
+      - name: Retain installation receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: go-install-${{ runner.os }}-${{ github.run_id }}
+          path: dist/go-install-receipt.json
+          if-no-files-found: error
+          retention-days: 14

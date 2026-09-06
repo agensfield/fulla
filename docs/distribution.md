@@ -66,6 +66,26 @@ commit/version as part of release closure. It is deliberately an explicit
 network acceptance command rather than a required public-index lookup on every
 CI commit.
 
+### Hosted native installation receipts
+
+The manually dispatched `install-acceptance.yml` workflow runs the same public
+installation harness on Linux and macOS with fresh installation caches. It
+accepts an explicit reviewed full commit ID and expected CLI version, uses only
+read repository permissions and pinned setup/checkout/artifact actions, and
+retains one JSON receipt per native runner for 14 days. Workflow inputs are
+passed through environment variables and quoted arguments, not interpolated
+into shell source. Receipts include Go OS/architecture and toolchain identity.
+
+```sh
+gh workflow run install-acceptance.yml --ref main \
+  -f commit="$EXPECTED_COMMIT" -f version=0.1.0-dev
+```
+
+Inspect the run's exact workflow SHA, selected source commit and each platform's
+receipt before counting it as evidence. This workflow does not tag, publish or
+install into a user's persistent environment. A development commit run does not
+satisfy tagged-release or Homebrew acceptance.
+
 ## Tag-gated publication
 
 `.github/workflows/release.yml` handles `v*` tag pushes only in
