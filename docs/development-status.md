@@ -1712,3 +1712,13 @@ journeys and both authorized noninteractive agent journeys. The ordered journeys
 now require human result headings. The predecessor checkpoint `2239555` also
 passed hosted Linux/macOS CI run 34002634212. Release qualification and the
 remaining acceptance-matrix gates are still open; no live store was changed.
+
+### Headless Wayland acceptance gate (2026-09-06)
+
+Added a disposable Linux CI Sway compositor and real wl-clipboard invocation to
+the existing native clipboard acceptance. Socket/runtime isolation, explicit
+backend assertion, process deadlines and owned compositor shutdown keep this
+separate from the host desktop. No runtime dependencies were added to Fulla;
+Sway/wl-clipboard are runner-only test dependencies. Local fixture acceptance,
+Ruff, basedpyright and actionlint pass. Actual Wayland execution awaits the
+hosted Linux job; retain the open matrix claim until that receipt exists.

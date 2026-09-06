@@ -54,3 +54,19 @@ and full-spec release qualification remain separate.
 The no-Git test proves current retained-backup behavior; it does not settle the
 spec's conflicting “irreversible” deletion and retained transactional-backup
 wording. That decision remains pending, and retention has not been weakened.
+
+## Real Wayland backend gate
+
+Linux CI also launches `scripts/acceptance-wayland.py`: a private headless Sway
+compositor using a software renderer, a private runtime directory and an explicit
+minimal config. No existing desktop socket is inherited. The wrapper refuses
+non-Linux/non-GitHub execution and bounds startup, acceptance and shutdown.
+It runs the shared clipboard harness with real `wl-copy`/`wl-paste`, checking the
+selected Fulla backend, UTF-8/trailing-newline preservation, matching expiry,
+replacement preservation and binary-input refusal. Hosted execution is pending;
+this gate's presence alone is not a passing Wayland receipt.
+
+The choice follows [wl-clipboard's data-control support](https://github.com/bugaevc/wl-clipboard/releases)
+and the [wlroots headless backend](https://github.com/swaywm/wlroots/blob/master/docs/env_vars.md).
+It tests the real protocol under Sway, not every desktop compositor or a
+race-free clipboard compare-and-clear operation.

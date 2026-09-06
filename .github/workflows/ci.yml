@@ -82,12 +82,15 @@ jobs:
         run: |
           go test -c -o dist/fulla-store-fixture ./internal/store
           python3 scripts/acceptance-upgrade.py dist/fulla-predecessor-bin dist/fulla dist/fulla-store-fixture
-      - name: Isolated X11 clipboard dependencies
+      - name: Isolated Linux clipboard dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth
+        run: sudo apt-get update && sudo apt-get install -y xvfb xclip xauth sway wl-clipboard
       - name: Real clipboard acceptance (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a python3 scripts/acceptance-clipboard.py dist/fulla --real-clipboard
+      - name: Real Wayland clipboard acceptance
+        if: runner.os == 'Linux'
+        run: python3 scripts/acceptance-wayland.py dist/fulla
       - name: Real clipboard acceptance (macOS)
         if: runner.os == 'macOS'
         run: python3 scripts/acceptance-clipboard.py dist/fulla --real-clipboard

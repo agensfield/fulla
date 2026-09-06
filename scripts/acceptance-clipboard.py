@@ -11,6 +11,11 @@ from typing import cast
 
 binary = str(Path(sys.argv[1]).resolve())
 real = "--real-clipboard" in sys.argv[2:]
+wayland = "--wayland" in sys.argv[2:]
+if wayland and (
+    not real or sys.platform != "linux" or not os.environ.get("WAYLAND_DISPLAY")
+):
+    raise RuntimeError("Wayland acceptance requires an explicit real Linux compositor")
 if real and os.environ.get("GITHUB_ACTIONS") != "true":
     raise RuntimeError(
         "real clipboard acceptance is restricted to disposable GitHub runners"
@@ -47,7 +52,9 @@ else:
         "XDG_CONFIG_HOME": str(home / "config"),
         "FULLA_CONFIG": "",
         "FULLA_TEST_AMBIENT_SECRET": "synthetic-ambient-secret",
-        "WAYLAND_DISPLAY": "" if real else "fixture-wayland",
+        "WAYLAND_DISPLAY": (os.environ["WAYLAND_DISPLAY"] if wayland else "")
+        if real
+        else "fixture-wayland",
     }
     base = [binary, "--store", str(home / "store")]
 
@@ -57,10 +64,16 @@ else:
         args = (
             ["pbpaste", "-Prefer", "txt"]
             if sys.platform == "darwin"
+            else ["wl-paste", "--no-newline", "--type", "text/plain;charset=utf-8"]
+            if wayland
             else ["xclip", "-selection", "clipboard", "-out", "-target", "UTF8_STRING"]
         )
         return subprocess.run(
-            args, env={**env, "LC_ALL": "en_US.UTF-8"}, capture_output=True, check=True
+            args,
+            env={**env, "LC_ALL": "en_US.UTF-8"},
+            capture_output=True,
+            check=True,
+            timeout=10,
         ).stdout
 
     def replace_clipboard(value: bytes) -> None:
@@ -70,6 +83,8 @@ else:
         args = (
             ["pbcopy"]
             if sys.platform == "darwin"
+            else ["wl-copy", "--type", "text/plain;charset=utf-8"]
+            if wayland
             else ["xclip", "-selection", "clipboard", "-in", "-target", "UTF8_STRING"]
         )
         _ = subprocess.run(
@@ -79,13 +94,19 @@ else:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=True,
+            timeout=10,
         )
 
     def cli(
         *args: str, data: bytes | None = None, expected: int = 0
     ) -> dict[str, object]:
         result = subprocess.run(
-            base + list(args), input=data, env=env, capture_output=True, check=False
+            base + list(args),
+            input=data,
+            env=env,
+            capture_output=True,
+            check=False,
+            timeout=30,
         )
         assert result.returncode == expected, f"unexpected status {result.returncode}"
         output = cast(dict[str, object], json.loads(result.stdout))
@@ -98,6 +119,8 @@ else:
     _ = cli("add", "text", "--stdin", "--json", data=value)
     output = cli("clip", "text", "--no-clear", "--json")
     assert output["command"] == "copy" and output["warnings"]
+    if wayland:
+        assert cast(dict[str, object], output["data"])["backend"] == "wayland"
     assert read_clipboard() == value
     _ = cli("copy", "text", "--clear-after", "200ms", "--json")
     deadline = time.monotonic() + 5
@@ -122,6 +145,7 @@ else:
 print(
     json.dumps(
         {
+            "backend": "wayland" if wayland else "platform" if real else "fixture",
             "exact_text": True,
             "expiry": True,
             "replacement_preserved": True,
