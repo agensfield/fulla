@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/agensfield/fulla/internal/crypt"
@@ -32,6 +33,10 @@ func writeMetadata(root *os.Root, dir string, meta Metadata, operation string) e
 	if err := root.Mkdir(dir, 0o700); err != nil {
 		return err
 	}
+	return writeMetadataContents(root, dir, meta, operation)
+}
+
+func writeMetadataContents(root *os.Root, dir string, meta Metadata, operation string) error {
 	for _, sub := range []string{"receipts", "backups", "transactions", "peers", "retired"} {
 		if err := root.Mkdir(dir+"/"+sub, 0o700); err != nil {
 			return err
@@ -191,7 +196,11 @@ func privateModes(root *os.Root, dir string) error {
 	})
 }
 
-func Adopt(directory string, dryRun bool, ui *crypt.UI) (result InitResult, err error) {
+func Adopt(directory string, dryRun bool, ui *crypt.UI) (InitResult, error) {
+	return adopt(directory, dryRun, ui, nil)
+}
+
+func adopt(directory string, dryRun bool, ui *crypt.UI, hook func(string) error) (result InitResult, err error) {
 	result = InitResult{Store: directory, Profile: "pa-v1", Adopted: true, DryRun: dryRun}
 	s, err := Open(directory, false, ui)
 	if err != nil {
@@ -205,16 +214,59 @@ func Adopt(directory string, dryRun bool, ui *crypt.UI) (result InitResult, err 
 		return result, err
 	}
 	var lock *Lock
+	stage := ""
+	published := false
 	if !dryRun {
 		lock, err = s.Lock("adopt")
 		if err != nil {
 			return result, err
 		}
 		defer func() {
-			if releaseErr := lock.Release(); releaseErr != nil && err == nil {
-				err = fault.Applied("adoption finalized but lock release failed", "init")
+			var cleanupErr error
+			if stage != "" && !published {
+				// Only the unchanged lock owner may remove unpublished staging.
+				var owner []byte
+				owner, cleanupErr = securefs.Read(s.Root, "lock/owner", 256)
+				if cleanupErr == nil && strings.TrimSpace(string(owner)) != lock.Token {
+					cleanupErr = fault.New("store.lock_changed", "lock ownership changed")
+				}
+				if cleanupErr == nil {
+					cleanupErr = s.Root.RemoveAll(stage)
+				}
+				if cleanupErr == nil {
+					cleanupErr = securefs.SyncDir(s.Root, ".")
+				}
+			}
+			releaseErr := lock.Release()
+			if cleanupErr != nil || releaseErr != nil {
+				failure := fault.New("store.cleanup_failed", "could not confirm adoption staging or lock cleanup")
+				failure.Details["applied"] = published
+				failure.Details["cleanup_required"] = true
+				failure.Details["target"] = s.Dir
+				if cleanupErr != nil {
+					failure.Details["staging_path"] = filepath.Join(s.Dir, stage)
+				}
+				if releaseErr != nil {
+					failure.Details["lock_cleanup_required"] = true
+				}
+				var original *fault.Error
+				if errors.As(err, &original) {
+					failure.Details["operation_code"] = original.Code
+					if original.Status >= 128 {
+						failure.Status = original.Status
+					}
+				}
+				if published {
+					failure.Status = 3
+				}
+				err = failure
 			}
 		}()
+		if hook != nil {
+			if err := hook("locked"); err != nil {
+				return result, err
+			}
+		}
 	}
 	result.Git, err = s.CleanGit()
 	if err != nil {
@@ -236,13 +288,27 @@ func Adopt(directory string, dryRun bool, ui *crypt.UI) (result InitResult, err 
 	if dryRun {
 		return result, nil
 	}
-	stage := ".fulla-adopt-" + securefs.ID()
-	defer s.Root.RemoveAll(stage)
-	if err := writeMetadata(s.Root, stage, newMetadata(), "init"); err != nil {
+	stageName := ".fulla-adopt-" + securefs.ID()
+	if err := s.Root.Mkdir(stageName, 0o700); err != nil {
 		return result, err
+	}
+	stage = stageName
+	if err := writeMetadataContents(s.Root, stage, newMetadata(), "init"); err != nil {
+		return result, err
+	}
+	if hook != nil {
+		if err := hook("staged"); err != nil {
+			return result, err
+		}
 	}
 	if err := securefs.RenameNew(s.Root, stage, metadata); err != nil {
 		return result, fault.New("store.publish_failed", "could not publish adoption metadata without replacement")
+	}
+	published = true
+	if hook != nil {
+		if err := hook("published"); err != nil {
+			return result, fault.Applied("adoption applied but finalization interrupted", "init")
+		}
 	}
 	if err := securefs.SyncDir(s.Root, "."); err != nil {
 		return result, fault.Applied("adoption applied but directory synchronization failed", "init")

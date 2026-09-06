@@ -1875,3 +1875,32 @@ untouched new occupant and a deep-valid published store. A negative overlay
 discarding cleanup failures and retaining obsolete stage ownership fails both
 regressions. This does not add automatic cleanup of killed-writer sibling
 orphans, fix adoption staging, or prove physical power-loss durability.
+
+### Adoption cleanup and applied-state reporting (2026-09-06)
+
+Adoption inherited unconditional, unchecked staging removal and discarded shared
+lock release errors whenever an operation error was already present. Finalization
+now tracks metadata publication explicitly, owns staging only after successful
+creation, and avoids removing an unpublished stage after lock ownership changes.
+Once metadata is published, the former staging pathname is never cleaned.
+
+Unconfirmed staging removal/parent synchronization or lock release returns
+store.cleanup_failed with applied, cleanup_required and the specific staging
+path and/or lock_cleanup_required. Unpublished cancellation status and typed
+cause survive; published cleanup failure returns partial status 3. Arbitrary
+underlying error text is not copied. A small split of metadata creation from
+metadata contents makes directory ownership unambiguous on partial writes.
+
+Twelve Git/no-Git cases cover handled cancellation, real stage/lock permission
+denial before/after publication, changed lock ownership and reused staging
+names. Original live pa paths/modes/digests and Git history remain unchanged.
+Targeted adoption/init race tests pass; negative overlays discarding cleanup
+errors or retaining obsolete ownership fail the regression checks. Killed
+adoption stages still lack a recovery binding and require separate work; these
+handled-error tests are not power-loss or same-user isolation proof.
+
+Rebuilt native Fulla passed the pinned real shell-pa acceptance on Git/no-Git:
+adoption, exact bytes, alternating CRUD, shared lock, basic rollback and mutually
+authenticated OpenSSH loopback sync. The no-Git predecessor's known post-write
+exit 1 remains explicit in its fixture receipt. `go vet ./...` passed. No live
+pa adoption or external-host cutover was performed.
