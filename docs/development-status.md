@@ -2327,3 +2327,19 @@ prototype with -15, while direct exec preserves it. The strict six-case gate
 records route statuses and remains failing; Ruff/basedpyright pass. Runtime and
 CGO-free distribution remain unchanged. See run-signal-inheritance.md for the
 required preparation boundary and why final-state restoration is insufficient.
+
+
+### Native stop/continue and interview reconciliation (2026-09-06)
+
+Read the original run interview and consulted its design session read-only. It
+confirms direct target semantics were consciously intended; exact inherited and
+pending signal state was not interviewed. Arda has one narrow wording question
+pending. No runtime redesign or weaker contract is selected while independent
+work continues. c8fe952 CI 34015135792 passed Linux/macOS.
+
+Added native SIGSTOP/SIGCONT acceptance with kernel stop notification, retained
+PID, resumed exit 23 and unchanged store/diagnostics. The first test exposed a Go
+BSD wait-helper mismatch with Darwin's actual SIGSTOP encoding; the exact
+platform status check fixes the fixture rather than weakening it. Native run
+race passed (2.798s), then CLI vet. This does not claim foreground shell job
+control or exact inherited-state parity.

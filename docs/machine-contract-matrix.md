@@ -173,3 +173,15 @@ preserves it, but current Fulla terminates before the target. A same-binary nati
 startup-hook prototype passed the initial five cases and PTY tests on macOS/Linux
 but failed this pending-signal case, so it was not adopted. The remaining work is
 an original-process preparation boundary, not simply a mask-reset call.
+
+## Direct stop/continue and original contract clarification
+
+TestRunTargetStopsAndContinuesWithoutSupervisor now observes the target's native
+SIGSTOP wait status at Fulla's original PID, resumes it with SIGCONT, verifies
+that same PID and exit 23, and checks unchanged store/diagnostics. The native run
+race tests and CLI vet pass. Foreground shell Ctrl-Z/fg remains separate.
+
+Original design consultation confirms the interview consciously selected direct
+target execution and signals after exec, without discussing inherited/pending
+state. The broader wording is being clarified with Arda; neither a waiver nor
+a native-startup redesign is assumed. See run-signal-inheritance.md.

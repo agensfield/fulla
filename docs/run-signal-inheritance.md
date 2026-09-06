@@ -107,3 +107,39 @@ The expanded gate exits 1 for both current Fulla (three failures) and the protot
 basedpyright pass without warnings. CI 34014436153 (restore bb4090b) and
 34014675730 (audit 79377c6) both passed Linux/macOS; neither executes this currently
 failing strict signal gate.
+
+## Original design consultation (2026-09-06)
+
+The original interview rollout (thread
+019fba52-6d8f-70e0-94bc-bc4e3e72d400) and a read-only follow-up distinguish
+conscious intent from the broad literal sentence. The interview explained a
+normal Unix exec: no shell or remaining Fulla supervisor, same PID/terminal/stdio/
+cwd/process group, direct target signal delivery and target exit behavior. It
+did not discuss inherited masks, ignored dispositions, pending signals or a
+pre-Go startup boundary. The original design session considers syscall.Exec
+faithful to that architecture and advises against a native/helper redesign solely
+for the broader interpretation without Arda's decision.
+
+The strict reproducer and literal parity failures remain valid. A narrow question
+is now pending with Arda: require direct target semantics after exec and document
+Go startup limits, or require exact inherited/pending-state parity and include
+the startup redesign. Neither interpretation is selected here. This clarification
+does not block independent implementation/acceptance and does not authorize a
+weaker release claim.
+
+## Direct target stop and continuation
+
+TestRunTargetStopsAndContinuesWithoutSupervisor verifies the target has Fulla's
+PID after checking its mapped/clean environment. The parent sends SIGSTOP and
+waits for that exact PID's kernel stop notification, then sends SIGCONT. The same
+target acknowledges continuation and exits 23. No diagnostic output or store
+path/mode/content changes are allowed; the owned process has bounded cleanup.
+This proves explicit stop/continue after exec, not shell foreground Ctrl-Z/fg or
+inherited-state preservation.
+
+The first fixture incorrectly used Go 1.26's BSD WaitStatus.Stopped/StopSignal
+helpers, which classify SIGSTOP as continued. Darwin's SDK sys/wait.h uses 0x13
+for continuation and defines a stopped notification as signal<<8 | 0x7f; Linux
+uses the same ordinary stop encoding. The fixture now compares the exact requested
+SIGSTOP notification. This changes test interpretation, not Fulla runtime behavior.
+Targeted native run race tests passed in 2.798s, then CLI vet passed.

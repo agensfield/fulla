@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -22,14 +23,24 @@ func TestRunHelper(t *testing.T) {
 	if os.Getenv("FULLA_TEST_RUN_HELPER") != "1" {
 		return
 	}
-	if target := os.Getenv("FULLA_TEST_RUN_TARGET"); target == "1" || target == "signal" {
+	if target := os.Getenv("FULLA_TEST_RUN_TARGET"); target == "1" || target == "signal" || target == "resume" {
 		if os.Getenv("TOKEN") != "synthetic-test-value\n" {
 			os.Exit(70)
 		}
 		if os.Getenv("UNSELECTED") != "" {
 			os.Exit(71)
 		}
+		var resumed chan os.Signal
+		if target == "resume" {
+			resumed = make(chan os.Signal, 1)
+			signal.Notify(resumed, syscall.SIGCONT)
+			defer signal.Stop(resumed)
+		}
 		fmt.Println(os.Getpid())
+		if resumed != nil {
+			<-resumed
+			fmt.Println("continued", os.Getpid())
+		}
 		if target == "signal" {
 			for {
 				time.Sleep(time.Hour)
