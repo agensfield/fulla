@@ -2083,3 +2083,19 @@ acceptance also passed (53.258s / 59.425s), including scoped infrastructure
 recovery and current/previous protocol transfers. The store still rechecks
 under the shared lock; a valid preflight cannot prevent a subsequent raced
 inventory change. Metadata migration and release work remain open.
+
+## 2026-09-06: Hosted Homebrew installation acceptance lane
+
+Added explicit macOS dispatch workflow and a runner-restricted installer harness
+at ad5be4b. It generates a disposable versioned package/formula, tests actual
+Homebrew installation, completion files and the formula's test block, and removes
+its scoped formula/tap. This fills the runtime-installation evidence path without
+publishing a preview tag or changing Arda's Mac. The local fixture commit and
+file URLs are explicitly separate from tagged distribution acceptance.
+
+Ruff, basedpyright and actionlint passed. Run 34009919496 passed in 1m53s
+on macOS/arm64, Homebrew 6.0.13. The downloaded JSON confirms real installation,
+completion content, brew test and cleanup. Artifact hashes and fixture/base
+commit IDs are recorded in distribution.md; release_acceptance remains false. Ordinary predecessor CI runs 34009680033 (0252574) and 34009496848
+(44e3570) passed on Linux/macOS. Metadata/recovery and actual release/tap gates
+remain open.

@@ -200,3 +200,49 @@ provenance and symlink cases, then runs Ruby syntax validation. Linux/macOS CI r
 this fixture gate. It deliberately uses synthetic archives, not installable
 release artifacts. Formula layout follows the [Homebrew cookbook](https://docs.brew.sh/Formula-Cookbook)
 and [completion API](https://docs.brew.sh/rubydoc/Formula.html#generate_completions_from_executable-instance_method).
+
+## Hosted Homebrew installation drill
+
+`.github/workflows/homebrew-acceptance.yml` is an explicit macOS-only dispatch
+lane. It runs `scripts/acceptance-homebrew.py` only on a GitHub-hosted runner for
+this repository. The script refuses to run on an ordinary local workstation.
+
+It creates a local, unpublished fixture commit changing only the CLI version to
+`0.1.0-brewtest`, builds the four-platform package inventory, and runs the ordinary
+formula generator against that fixture commit. Only the formula's package URLs
+are rewritten to the runner's local files. The installation and test methods are
+unchanged. An ephemeral `fulla-fixture/acceptance` tap then exercises actual
+`brew install`, installed version, Bash/Zsh/Fish completion content (ignoring outer whitespace), and
+`brew test`. The script checks that Fulla/the tap were absent beforehand, disables
+Homebrew automatic updates/cleanup/analytics, and removes its formula and tap.
+
+```sh
+gh workflow run homebrew-acceptance.yml --repo agensfield/fulla --ref main
+```
+
+A successful run retains a JSON receipt for 14 days: base and fixture commits,
+fixture version, platform, Homebrew version, binary/formula/completion SHA-256
+values, test success and cleanup. It is installation-method acceptance on the
+recorded native runner, not public release download, attestation, real Agensfield
+tap installation, other-architecture acceptance or user-store adoption. The
+release version and public tag stay unchanged. Failure output retains the
+underlying command diagnostics for root-cause investigation.
+
+[Run 34009919496](https://github.com/agensfield/fulla/actions/runs/34009919496)
+passed on macOS/arm64 using Homebrew 6.0.13. Its downloaded receipt confirms
+installation, formula test and cleanup. Base source is ad5be4ba5b329608b70e690823b2fa04aff74481;
+local fixture commit is ced0e6831de7e22071a029095df1202da86dc1a0. The latter is
+unpublished and only changes the fixture CLI version to 0.1.0-brewtest.
+
+| Installed artifact | SHA-256 |
+| --- | --- |
+| Binary | `8b911aef3618cda8300379314569f332f2b086cff356ff566a6299a3a2dc2849` |
+| Fixture formula | `67572d92e825ed302568eabf37e327391dfb2d5f161b6230c5f1c5bd60239f08` |
+| Bash completion | `5c989723e1b22d97db6d00a7620ec3b6314a68072456dd921bdcf3be3be9bcc9` |
+| Zsh completion | `0ed8aca655a482900b8d0bde1e9fc2e29fed2a836bdc2fa506c572d0f1825105` |
+| Fish completion | `4d69c10b5e7444c0959c9854e409e2a78c6b6be8e42e074adfe534e59742f39a` |
+
+The local downloaded JSON is `dist/homebrew-34009919496/homebrew-receipt.json`.
+It explicitly records `release_acceptance: false`. Public tap/release URL
+installation, other native platforms, and final tagged artifact acceptance remain
+open; this fixture run does not advance the release version.
