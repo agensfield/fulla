@@ -166,7 +166,7 @@ func (a *App) success(command string, data any, jsonMode bool) int {
 	for _, warning := range warnings {
 		fmt.Fprintln(a.Err, warning)
 	}
-	if err := json.NewEncoder(a.Out).Encode(data); err != nil {
+	if err := writeHumanResult(a.Out, command, data); err != nil {
 		return 3
 	}
 	return 0

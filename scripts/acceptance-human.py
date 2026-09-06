@@ -78,6 +78,10 @@ file.write_bytes(pathlib.Path({str(payload)!r}).read_bytes())
                 binary, env, ["--config", str(config), *args], actions or [], store
             )
             assert code == status, f"human {args}: exit={code}, output={output!r}"
+            if code == 0:
+                assert b"fulla " + args[0].encode() in output, (
+                    "missing human result heading"
+                )
             for value in values.values():
                 if value:
                     assert value not in output, (

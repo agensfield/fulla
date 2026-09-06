@@ -1692,3 +1692,23 @@ Linux/macOS CI now runs the ordered human journey. Real clipboard backends,
 human presentation, shell installation and release qualification remain their
 own gates. Prior cc82d88 and 627ac88 passed hosted CI 34002250879/34002081191.
 See human-journey.md for exact scope and limitations.
+
+### Human metadata presentation (2026-09-06)
+
+Default successful control-command output now uses command headings, indented
+labels and lists. It retains every public result field, including false flags,
+empty collections, nulls and recovery identifiers. Strings and metadata keys
+escape terminal controls. The shared renderer projects through existing JSON
+field annotations, excluding private/internal fields and preserving full integer
+precision; it does not introduce a second result schema. Machine envelopes,
+raw show, and stream-owning passthrough commands retain their existing paths.
+Warnings remain on stderr. This provides readable complete metadata rather than
+command-specific tables; scripts should explicitly request `--json`.
+
+CLI race tests and vet passed, including output-write failure, excluded-field,
+control-character, empty-state and machine-envelope checks. Fresh native builds
+passed the original controlling-terminal harness, ordered Git/no-Git human
+journeys and both authorized noninteractive agent journeys. The ordered journeys
+now require human result headings. The predecessor checkpoint `2239555` also
+passed hosted Linux/macOS CI run 34002634212. Release qualification and the
+remaining acceptance-matrix gates are still open; no live store was changed.

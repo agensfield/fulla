@@ -40,8 +40,17 @@ scripts; `pyrightconfig.json` describes `scripts` as the execution root used by
 direct script invocation, without disabling diagnostics. The scoped Python cache
 ignore keeps module imports from dirtying the release-packaging checkout.
 
-This is bounded J1 journey evidence. Human output presentation, native Wayland,
-broader shell installation and full-spec release qualification remain separate.
+Human metadata results now have command headings, indented field labels and
+lists, rather than raw JSON. Strings are quoted and terminal controls escaped;
+false, empty and null fields remain visible, as do recovery identifiers. The
+renderer uses the public JSON field projection to exclude private/internal
+fields and preserves integer precision. This is a basic complete metadata view,
+not a command-specific table or interactive browser. Warnings remain on stderr.
+`--json` retains its versioned envelope and raw `show` retains exact bytes.
+The journey checks human headings as well as the behavior described above.
+
+This is bounded J1 journey evidence. Native Wayland, broader shell installation
+and full-spec release qualification remain separate.
 The no-Git test proves current retained-backup behavior; it does not settle the
 spec's conflicting “irreversible” deletion and retained transactional-backup
 wording. That decision remains pending, and retention has not been weakened.
