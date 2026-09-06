@@ -94,5 +94,26 @@ Recovery reports lock release, not reconstructed export completion: there is no
 bound export journal from which to recover a missing receipt after publication.
 This test explicitly preserves that limitation rather than inventing an applied
 receipt from the external output. Staging-write/rename/sync instruction windows,
-stdout partial writes, and durable export-to-receipt reconciliation still require
-separate work. A successful killed-process fixture is not power-loss proof.
+native stdout interruption and durable export-to-receipt reconciliation still
+require separate work. Handled stdout write outcomes are covered below. A successful killed-process fixture is not power-loss proof.
+
+## Stdout write outcome accounting
+
+Logical stdout export previously ignored the writer's byte count and returned raw
+writer errors. A short write with nil error could therefore create an applied
+success receipt for a truncated bundle. Export now requires the complete encoded
+length with no error before proceeding to receipt publication. A zero-byte failure
+returns typed export.write_failed (status 1); a failure after accepted bytes returns
+status 3 with applied=true. Both include bytes_written and output_complete, without
+formatting the underlying writer error. Even a full-length write accompanied by
+an error remains a failure and creates no success receipt. No automatic write
+retry can duplicate part of the binary stream.
+
+Twelve Git/no-Git store cases cover success, zero/partial writes with errors,
+zero/partial short writes without errors, and full-length writes with errors.
+They check receipt absence/presence, typed byte accounting, redaction, unchanged
+source state and whether the captured encrypted stream verifies. Two public CLI
+dispatch cases prove status 3, stderr-only diagnostics and no receipt after a short
+write. Previous transfer.go source fails all ten store error/short-write cases.
+These controlled writer fixtures do not claim operating-system SIGPIPE handling
+or atomic stream delivery.

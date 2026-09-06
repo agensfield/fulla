@@ -130,8 +130,15 @@ func (s *Store) exportLogical(names []string, recipients []age.Recipient, output
 	result.Bytes = stats.Bytes
 	result.Output = output
 	if output == "-" {
-		if _, err := stdout.Write(encoded.Bytes()); err != nil {
-			return result, err
+		n, writeErr := stdout.Write(encoded.Bytes())
+		if writeErr != nil || n != encoded.Len() {
+			problem := fault.New("export.write_failed", "could not write export stream")
+			if n > 0 {
+				problem = fault.Applied("export stream write failed; output may be incomplete", "export")
+			}
+			problem.Details["bytes_written"] = n
+			problem.Details["output_complete"] = n == encoded.Len()
+			return result, problem
 		}
 	} else {
 		if err := s.PublishArtifact(output, encoded.Bytes()); err != nil {

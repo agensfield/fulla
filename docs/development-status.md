@@ -2538,3 +2538,20 @@ currently releases the dead export lock without reconstructing a missing receipt
 Tests distinguish this from successful artifact verification; they do not invent
 completion metadata. Low-level staging/write/rename windows, stdout partial-write
 handling and durable receipt reconciliation remain explicit inventory gaps.
+
+## Stdout export short-write fix (2026-09-06)
+
+The remaining output-channel audit found that ExportLogical ignored Write's byte
+count and returned raw writer errors. A short nil-error write could get a success
+receipt for a truncated bundle. The fix requires the complete encoded length and
+nil error, redacts failed-writer diagnostics, reports accepted bytes and completion,
+and distinguishes zero-byte refusal from partially applied output (status 3).
+Failure never creates a success receipt or retries the stream.
+
+Twelve Git/no-Git store cases plus scoped/publication regression passed under race
+in 11.955s. Two public CLI dispatch cases passed under race in 3.016s, proving the
+partial status reaches the caller, errors remain on stderr and no receipt appears.
+The previous transfer.go overlay fails all ten store error/short-write cases,
+including the former nil-error false success. Full-project vet passed. These are
+controlled writer tests; native SIGPIPE and interrupted streams remain separate.
+File-export fix 0b520f6 now has successful Linux/macOS hosted CI 34020275708.
